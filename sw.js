@@ -1,6 +1,6 @@
 /* مكوك بيشو — كاش أوفلاين: أول ما تفتح الصفحة من رابط، كل الملفات بتتخزن على الجهاز */
 var CACHE = "makkook-besho-v3";
-var FILES = ["./", "index.html", "app.js", "model.js", "highs-engine.js", "wasm-data.js", "manifest.json", "icon-192.png", "icon-512.png"];
+var FILES = ["./", "index.html", "app.js", "model.js", "highs-engine.js", "19-wasm-data.js", "manifest.json", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
 });
