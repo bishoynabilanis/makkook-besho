@@ -263,7 +263,7 @@
 
 
   // ---------- النسخة والتحديث التلقائي على نفس الرابط ----------
-  var APP_VERSION = "12";
+  var APP_VERSION = "13";
   var verTag = document.getElementById("verTag");
   if (verTag) verTag.textContent = "النسخة " + APP_VERSION;
   var updatePending = false;
@@ -951,7 +951,7 @@
     navigator.serviceWorker.addEventListener("controllerchange", function () {
       if (hadController) { location.reload(); }
     });
-    navigator.serviceWorker.register("sw.js").then(function (reg) {
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
       reg.update();
       window.addEventListener("focus", function () { reg.update(); });
     }).catch(function () {});
@@ -969,7 +969,7 @@
     var dbgEl = document.getElementById("dbg");
     var dbgFrames = 0;
     function dbg(extra) {
-      if (dbgEl) dbgEl.textContent = "cv " + c.width + "x" + c.height + " dpr" + dpr + " " + extra;
+      if (dbgEl) dbgEl.textContent = "v13 cv " + c.width + "x" + c.height + " dpr" + dpr + " " + extra;
     }
     function size() {
       W = window.innerWidth; H = window.innerHeight;
@@ -979,7 +979,7 @@
     }
     size();
     window.addEventListener("resize", size);
-    dbg(REDUCED ? "rm:1" : "ctx:ok");
+    dbg(REDUCED ? "rm:1 gentle" : "ctx:ok");
     var fg = document.getElementById("fgCanvas");
     var fg2 = null;
     try { fg2 = fg && fg.getContext ? fg.getContext("2d") : null; } catch (efg) { fg2 = null; }
@@ -1008,36 +1008,15 @@
     var threads = [];
     for (i = 0; i < 3; i++) threads.push({ x: Math.random() * 1.3 - 0.3, sp: 0.00006 + Math.random() * 0.00008, tilt: 0.22 + Math.random() * 0.28 });
     var comet = null;
-    if (REDUCED) {
-      // تقليل الحركة: فريم واحد ثابت — المنظر يفضل موجود من غير حركة
-      try {
-        var sec0 = sector();
-        var m0 = Math.max(W, H);
-        var ng0 = g.createRadialGradient(W / 2, H * 0.3, 10, W / 2, H * 0.3, m0 * 0.7);
-        ng0.addColorStop(0, rgba(sec0.n1, 0.09)); ng0.addColorStop(0.5, rgba(sec0.n2, 0.05)); ng0.addColorStop(1, "rgba(0,0,0,0)");
-        g.fillStyle = ng0; g.fillRect(0, 0, W, H);
-        stars.forEach(function (s0) {
-          g.beginPath(); g.arc(s0.x * W, s0.y * H, s0.r, 0, 6.283);
-          g.fillStyle = "rgba(255,255,255,.45)"; g.fill();
-        });
-        var ox0 = W / 2, oy0 = H * 0.2, R0 = 46;
-        var halo0 = g.createRadialGradient(ox0, oy0, R0 * 0.3, ox0, oy0, R0 * 2.6);
-        halo0.addColorStop(0, rgba(sec0.n1, 0.18)); halo0.addColorStop(1, "rgba(0,0,0,0)");
-        g.fillStyle = halo0; g.beginPath(); g.arc(ox0, oy0, R0 * 2.6, 0, 6.283); g.fill();
-        var pb0 = g.createRadialGradient(ox0 - R0 * 0.35, oy0 - R0 * 0.35, R0 * 0.1, ox0, oy0, R0);
-        pb0.addColorStop(0, rgba(sec0.n1, 0.38)); pb0.addColorStop(1, rgba(sec0.n2, 0.12));
-        g.fillStyle = pb0; g.beginPath(); g.arc(ox0, oy0, R0, 0, 6.283); g.fill();
-      } catch (e0) { showErr("ambient-static: " + (e0.message || e0)); }
-      dbg("rm:1 static");
-      return;
-    }
     var t0 = 0;
     var errOnce = false;
+    var GENTLE = REDUCED; // تقليل الحركة: حركة أبطأ وأخف — مش إيقاف (بطلب المستخدم)
     function frame(t) {
       if (document.hidden) { requestAnimationFrame(frame); return; }
-      if (t - t0 < 40) { requestAnimationFrame(frame); return; } // ~25fps للموبايلات الضعيفة
+      if (t - t0 < (GENTLE ? 70 : 40)) { requestAnimationFrame(frame); return; } // ~25fps (~14 لطيف)
       try {
       var dt = t - t0; t0 = t;
+      if (GENTLE) dt = dt * 0.45;
       var sec = sector();
       g.clearRect(0, 0, W, H);
 
@@ -1130,7 +1109,7 @@
           fg2.beginPath(); fg2.moveTo(x0, -40); fg2.lineTo(x0 + slope, H + 40);
           fg2.strokeStyle = grd; fg2.lineWidth = 1.6; fg2.stroke();
         });
-        if (!comet && Math.random() < dt / 3800) {
+        if (!GENTLE && !comet && Math.random() < dt / 3800) {
           comet = { x: Math.random() * W * 0.6 + W * 0.1, y: -30, vx: 0.16 + Math.random() * 0.12, vy: 0.3 + Math.random() * 0.16, life: 1 };
         }
         if (comet) {
@@ -1155,7 +1134,7 @@
         return; // وقّف اللوب بدل تكرار الخطأ
       }
       dbgFrames++;
-      if (dbgFrames % 20 === 1) dbg("f:" + dbgFrames + " st:" + (document.body.dataset.step || "?"));
+      if (dbgFrames % 20 === 1) dbg((GENTLE ? "gentle " : "") + "f:" + dbgFrames + " st:" + (document.body.dataset.step || "?"));
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
