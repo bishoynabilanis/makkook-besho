@@ -188,7 +188,7 @@
       sec.classList.add("enter");
     }
     if (n === 3 && highs) {
-      if (document.body.dataset.solved === "1") solveInstant(); else solveAnimated();
+      if (document.body.dataset.solved === "1") solveInstant(); else solveLive();
     }
     if (n === 4) renderWhy();
     window.scrollTo(0, 0);
@@ -280,30 +280,103 @@
     document.body.dataset.solved = "1";
   }
 
-  var STAGES = ["بيجمّع البنود…", "بيجرّب كل الاحتمالات الممكنة…", "بيقارن الأرباح…", "بيثبت إن ده الأحسن رياضيًا…"];
-  function solveAnimated() {
+  // ---------- البحث الحي: بنجرّب كل التركيبات قدام المستخدم ----------
+  function solveLive() {
     if (REDUCED) { solveInstant(); return; }
-    var d = compute();
-    if (!d) return;
+    var items = readItems();
+    var budget = Number(budgetEl.value) || 0;
+    var hours = Number(hoursEl.value) || 0;
+    if (!items.length) { solveInstant(); return; }
+    var viz = document.getElementById("searchViz");
+    var svChips = document.getElementById("svChips");
+    var svProfit = document.getElementById("svProfit");
+    var svBest = document.getElementById("svBest");
+    var svBestBox = document.getElementById("svBestBox");
+    var svCount = document.getElementById("svCount");
+    var svBarCost = document.getElementById("svBarCost");
+    var svBarHours = document.getElementById("svBarHours");
+    var svProg = document.getElementById("svProg");
+    var svMsg = document.getElementById("svMsg");
+    var svTitle = document.getElementById("svTitle");
+    svChips.innerHTML = "";
+    var chipEls = items.map(function (it) {
+      var c = document.createElement("span");
+      c.className = "chip out";
+      c.textContent = it.name;
+      svChips.appendChild(c);
+      return c;
+    });
+    svBest.textContent = "0"; svProfit.textContent = "0"; svProg.style.width = "0%";
+    svMsg.className = "sv-msg"; svMsg.textContent = "";
+    viz.classList.remove("hidden");
     solveBtn.disabled = true;
     solveBtn.classList.add("thinking");
-    var orig = "احسب القرار الأمثل";
-    var i = 0;
-    solveBtn.textContent = STAGES[0];
-    var iv = setInterval(function () {
-      i++;
-      if (i < STAGES.length) { solveBtn.textContent = STAGES[i]; return; }
-      clearInterval(iv);
+    solveBtn.textContent = "بيشتغل قدامك…";
+    var n = items.length;
+    var total = Math.pow(2, n) - 1;
+    var MAXSTEPS = 96;
+    var stride = Math.max(1, Math.ceil(total / MAXSTEPS));
+    var steps = Math.ceil(total / stride);
+    var delay = Math.max(25, Math.min(120, Math.round(2800 / steps)));
+    svTitle.textContent = stride === 1
+      ? "بيجرّب كل التركيبات الممكنة واحدة واحدة…"
+      : "بيستعرض عينة من " + fmt(total) + " تركيبة — والمحرك بيحسمها كلها في الآخر…";
+    var bestProfit = -1, tried = 0, prevMask = -1, mask = 0;
+    function stepFn() {
+      mask += stride;
+      if (mask > total) { finish(); return; }
+      tried++;
+      var cost = 0, hrs = 0, prof = 0;
+      for (var i = 0; i < n; i++) {
+        var on = (mask >> i) & 1;
+        if (on) { cost += items[i].cost; hrs += items[i].hours; prof += items[i].profit; }
+        chipEls[i].classList.toggle("in", !!on);
+        chipEls[i].classList.toggle("out", !on);
+        if (prevMask >= 0 && (((mask ^ prevMask) >> i) & 1)) {
+          chipEls[i].classList.add("flip");
+          (function (el) { setTimeout(function () { el.classList.remove("flip"); }, 160); })(chipEls[i]);
+        }
+      }
+      prevMask = mask;
+      svProfit.textContent = fmt(prof);
+      var pc = budget > 0 ? (cost / budget) * 100 : (cost > 0 ? 101 : 0);
+      var ph = hours > 0 ? (hrs / hours) * 100 : (hrs > 0 ? 101 : 0);
+      svBarCost.style.width = Math.min(100, pc) + "%";
+      svBarHours.style.width = Math.min(100, ph) + "%";
+      svBarCost.classList.toggle("over", cost > budget);
+      svBarHours.classList.toggle("over", hrs > hours);
+      svCount.textContent = tried + " / " + (stride === 1 ? fmt(total) : steps) + " تركيبة";
+      svProg.style.width = Math.min(100, (tried / steps) * 100) + "%";
+      var over = cost > budget || hrs > hours;
+      if (!over) {
+        if (prof > bestProfit) {
+          bestProfit = prof;
+          svBest.textContent = fmt(prof);
+          svBestBox.classList.remove("bump"); void svBestBox.offsetWidth; svBestBox.classList.add("bump");
+          svMsg.className = "sv-msg good";
+          svMsg.textContent = "✓ دي أحسن تشكيلة لحد دلوقتي — " + fmt(prof) + " جنيه";
+        }
+      } else {
+        svMsg.className = "sv-msg bad";
+        svMsg.textContent = "✗ التركيبة دي خارج القيود — " + (cost > budget ? "الفلوس مش مكفية" : "الوقت مش مكفي");
+      }
+      setTimeout(stepFn, delay);
+    }
+    function finish() {
+      svMsg.className = "sv-msg good";
+      svMsg.textContent = "✓ خلص البحث — وده القرار الأمثل المتأكد منه";
+      var d = compute();
       solveBtn.classList.remove("thinking");
-      solveBtn.textContent = orig;
+      solveBtn.textContent = "احسب القرار الأمثل";
       solveBtn.disabled = false;
+      if (!d) return;
       document.getElementById("verdict").classList.remove("pop");
       void document.getElementById("verdict").offsetWidth;
       document.getElementById("verdict").classList.add("pop");
       renderResult(d, true);
-      // نعلّم solved بعد ما العدّادات تخلص عشان الأرقام تكون نهائية
       setTimeout(function () { document.body.dataset.solved = "1"; }, 700);
-    }, 240);
+    }
+    setTimeout(stepFn, 350);
   }
 
   function maybeResolve() {
@@ -420,7 +493,7 @@
   });
   budgetEl.addEventListener("input", function () { saveState(); maybeResolve(); });
   hoursEl.addEventListener("input", function () { saveState(); maybeResolve(); });
-  solveBtn.addEventListener("click", solveAnimated);
+  solveBtn.addEventListener("click", solveLive);
   document.getElementById("saveScn").addEventListener("click", saveCurrentScenario);
   document.querySelectorAll("[data-go]").forEach(function (b) {
     b.addEventListener("click", function () { showStep(Number(b.dataset.go)); });
