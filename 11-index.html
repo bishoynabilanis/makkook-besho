@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b3d6b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="مكوك بيشو">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="icon" href="icon-512.png">
+
+<title>مكوك بيشو — أحسن قرار بأرقامك</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Tahoma, "Segoe UI", sans-serif; margin: 0; background: #f4f1ea; color: #1b1b1b; line-height: 1.8; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 18px 14px 40px; }
+  header h1 { font-size: 26px; margin: 6px 0 2px; color: #0b3d6b; }
+  header p { margin: 0 0 14px; color: #555; font-size: 14px; }
+  .card { background: #fff; border: 1px solid #ddd2bf; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 17px; margin: 0 0 10px; color: #0b3d6b; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 150px; }
+  label { display: block; font-size: 14px; margin-bottom: 3px; }
+  input { width: 100%; padding: 8px; border: 1px solid #c9bfa9; border-radius: 7px; font-size: 15px; font-family: inherit; background:#fffdf8; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: #e6eef7; padding: 6px; border: 1px solid #cbbfae; }
+  td { padding: 4px; border: 1px solid #e0d7c6; text-align: center; }
+  td input { padding: 6px; font-size: 14px; }
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 8px; }
+  .del { background: #fde8e8; color: #a33; font-size: 16px; width: 34px; height: 34px; }
+  .add { background: #e6eef7; color: #0b3d6b; padding: 8px 14px; font-size: 14px; margin-top: 8px; }
+  .solve { width: 100%; background: #0b3d6b; color: #fff; font-size: 18px; padding: 13px; margin-top: 4px; }
+  .solve:disabled { background: #9db4c8; cursor: wait; }
+  #status { font-size: 13px; color: #777; text-align: center; margin-top: 6px; }
+  .verdict { background: #eaf6ea; border: 1px solid #7ab87a; border-radius: 10px; padding: 12px 14px; font-size: 17px; font-weight: bold; color: #145214; margin-bottom: 10px; }
+  .totals { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tot { flex: 1; min-width: 120px; background: #fff; border: 1px solid #ddd2bf; border-radius: 8px; padding: 8px; text-align: center; }
+  .tot b { display: block; font-size: 20px; color: #0b3d6b; }
+  .why { background: #fff6e0; border: 1px solid #e0b040; border-radius: 8px; padding: 10px 12px; font-size: 14.5px; }
+  .skip { color: #777; font-size: 14px; margin-top: 8px; }
+  footer { font-size: 12.5px; color: #888; text-align: center; margin-top: 18px; }
+  .tbl { overflow-x: auto; }
+  @media (max-width: 520px) {
+    header h1 { font-size: 22px; }
+    table { font-size: 13px; }
+    td input { padding: 5px 3px; font-size: 13px; }
+    th, td { padding: 3px; }
+    .solve { font-size: 16px; padding: 12px; }
+    .wrap { padding: 12px 8px 30px; }
+  }
+  .tbl input[data-k="name"] { min-width: 140px; }
+  .tbl input[data-k="category"] { min-width: 90px; }
+  .tbl input[data-k="cost"], .tbl input[data-k="profit"], .tbl input[data-k="hours"] { width: 62px; min-width: 56px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>مكوك بيشو</h1>
+    <p>أحسن قرار شراء وصيانة، محسوب ببحوث العمليات. أوفلاين ١٠٠٪ — مفيش نت، مفيش اشتراك، مفيش حاجة بتطلع من جهازك.</p>
+  </header>
+
+  <div class="card">
+    <h2>المتاح النهارده</h2>
+    <div class="row">
+      <div class="field">
+        <label for="budget">ميزانية قطع الغيار (جنيه)</label>
+        <input id="budget" type="number" min="0" step="50" value="1500">
+      </div>
+      <div class="field">
+        <label for="hours">ساعات الفني المتاحة</label>
+        <input id="hours" type="number" min="0" step="0.5" value="8">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>الأجهزة اللي مستنية</h2>
+    <div class="tbl"><table>
+      <thead>
+        <tr><th>الجهاز / القطعة</th><th>القسم / النوع</th><th>تكلفة القطعة</th><th>ربح التصليح</th><th>ساعات الشغل</th><th></th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <button class="add" id="addRow" type="button">+ ضيف جهاز</button>
+    <button class="add" id="resetBtn" type="button" style="margin-inline-start:8px;background:#fde8e8;color:#a33;">رجّع المثال الأصلي</button>
+    <datalist id="cats">
+      <option value="غسالات"></option><option value="تلاجات"></option><option value="سخانات"></option>
+      <option value="ميكروويف"></option><option value="بوتاجازات"></option><option value="تلفزيون"></option>
+      <option value="تكييفات"></option><option value="أخرى"></option>
+    </datalist>
+    <div style="font-size:12.5px;color:#888;margin-top:6px;">كل تعديل بيتسجل تلقائيًا على جهازك — لو قفلت الصفحة ورجعت، هتلاقي أرقامك زي ما هي (حتى أوفلاين).</div>
+  </div>
+
+  <button class="solve" id="solveBtn" type="button" disabled>احسب أحسن خطة</button>
+  <div id="status">بيجهّز محرك الحساب…</div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>الخطة</h2>
+    <div class="verdict" id="verdict"></div>
+    <div class="totals">
+      <div class="tot">إجمالي الربح<b id="tProfit"></b></div>
+      <div class="tot">هتصرف<b id="tCost"></b></div>
+      <div class="tot">هتشتغل<b id="tHours"></b></div>
+    </div>
+    <div class="why" id="why"></div>
+    <div class="skip" id="skipList"></div>
+    <div class="skip">نفس الأرقام بتطلع نفس الخطة كل مرة، والحل مضمون إنه الأحسن جوه القيود دي (مش تخمين).</div>
+  </div>
+
+  <footer>
+    مكوك بيشو — نسخة الورشة. محرك الحل: HiGHS مفتوح المصدر (رخصة MIT). الصفحة دي ملف واحد على جهازك، بتشتغل من غير إنترنت خالص.
+  </footer>
+</div>
+
+<script>var module = { exports: {} }; var exports = module.exports;</script>
+<script src="wasm-data.js"></script>
+<script src="highs-engine.js"></script>
+<script>window.HighsFactory = module.exports; module = undefined; exports = undefined;</script>
+<script src="model.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
