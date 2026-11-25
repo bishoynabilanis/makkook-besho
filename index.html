@@ -171,6 +171,27 @@
   .lb b.tick { transform: scale(1.18); color: #b9f5d2; }
 
 
+  /* ---------- قناتك ---------- */
+  .ch-props { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .ch-props button { flex: 1; min-width: 130px; background: #1b1b22; border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 10px; font-family: inherit; font-size: 13.5px; cursor: pointer; }
+  .ch-props button.active { border-color: var(--orange); color: var(--orange); }
+  .ch-how details { background: #101015; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
+  .ch-how summary { cursor: pointer; color: var(--txt); font-weight: bold; }
+  .ch-how p { color: var(--muted); font-size: 13px; margin: 6px 0 4px; }
+  .ch-drop input { display: none; }
+  .ch-drop label { display: block; text-align: center; border: 2px dashed var(--line); border-radius: 12px; padding: 22px 10px; color: var(--muted); cursor: pointer; background: rgba(27,27,34,.6); font-size: 15px; }
+  .ch-drop label:active { border-color: var(--orange); color: var(--txt); }
+  #chPaste { width: 100%; background: #101015; border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 10px; font-family: inherit; font-size: 13px; box-sizing: border-box; direction: auto; }
+  .ch-card { background: #101015; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+  .ch-card h3 { margin: 0 0 6px; font-size: 16px; color: var(--orange); }
+  .ch-card p, .ch-card li { font-size: 14px; margin: 4px 0; }
+  .ch-card ul { margin: 6px 0; padding-right: 18px; }
+  .ch-card .warn { color: #ffb74d; }
+  .ch-card .good { color: #81c784; }
+  .ch-card .dim { color: var(--muted); font-size: 12.5px; }
+  .ch-stat { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .ch-stat div { flex: 1; min-width: 95px; background: #1b1b22; border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; color: var(--muted); font-size: 12px; }
+  .ch-stat div b { display: block; color: var(--txt); font-size: 17px; margin-top: 2px; }
   /* ---------- البنود: كروت نيون تتحرك وتتسحب ---------- */
   #itemsTable { display: block; }
   #itemsTable thead { display: block; }
@@ -320,6 +341,7 @@
     <button type="button" data-step="2"><b>٢</b>القيود</button>
     <button type="button" data-step="3"><b>٣</b>الخطة</button>
     <button type="button" data-step="4"><b>٤</b>ليه وماذا لو</button>
+    <button type="button" data-step="5"><b>٥</b>قناتك</button>
   </div>
 
   <div class="livebar" id="livebar">
@@ -442,9 +464,48 @@
     </div>
   </div>
 
+  <!-- خطوة ٥: قناتك -->
+  <div class="card step hidden" id="step-5">
+    <h2><span>٠٥</span> قناتك: فيسبوك ويوتيوب</h2>
+    <p class="hint">ارفع ملف التصدير زي ما طلع من فيسبوك أو يوتيوب بالظبط — CSV أو JSON أو HTML أو ملف الـ ZIP نفسه، من غير ما تغيّر فيه حاجة. التحليل كله بيحصل على جهازك، ومفيش حاجة بتطلع برّه.</p>
+    <div class="ch-props" id="chProps">
+      <button type="button" data-prop="tr_yt">📹 تريند رادار — يوتيوب</button>
+      <button type="button" data-prop="mh_yt">📹 المهندس — يوتيوب</button>
+      <button type="button" data-prop="mh_fb">📘 المهندس — فيسبوك</button>
+    </div>
+    <div class="ch-how">
+      <details>
+        <summary>📹 يوتيوب — تجيب الملف منين؟</summary>
+        <p>من الكمبيوتر: افتح <b>استوديو يوتيوب</b> ← الإحصاءات ← <b>الوضع المتقدّم</b> ← اختار التقسيم «المحتوى» ← من فوق «تصدير العرض الحالي» ← CSV. زوّد المقاييس اللي تحبها قبل التصدير (المشاهدات، متوسط نسبة المشاهدة، مرات الظهور ونسبة النقر، وقت نشر الفيديو) — كل مقياس تضيفه بيديك تحليل أعمق.<br>
+        ⚠️ جوجل تيك آوت (Takeout) مفيهوش أرقام قناتك — ده سجل مشاهدتك إنت بس. لو رفعته هنقراه ونقولك اللي فيه، بس أداء القناة بيتاخد من الاستوديو.</p>
+      </details>
+      <details>
+        <summary>📘 فيسبوك — تجيب الملف منين؟</summary>
+        <p>من <b>Meta Business Suite</b> ← الرؤى (Insights) ← المحتوى ← تصدير البيانات ← CSV. بيطلع ملف فيه كل بوست وأرقامه (المشاهدات، وقت النشر، نوع المنشور، الوصف...).<br>
+        ولو عندك تصدير من <b>Graph API / رؤى الصفحة</b> (ملف المنشورات post_id,created_time_utc,... أو ملف الحركة اليومية date_end_time_utc,...) بيتقري برضه زي ما هو.<br>
+        ⚠️ «تنزيل معلوماتك» من حسابك الشخصي مفيهاش أي أرقام أداء — الأرقام بتتاخد من Business Suite أو رؤى الصفحة.</p>
+      </details>
+    </div>
+    <div class="ch-drop">
+      <input type="file" id="chFile" multiple accept=".csv,.json,.html,.htm,.txt,.zip">
+      <label for="chFile">🗂️ اختار ملف التصدير (أو أكتر من ملف)</label>
+    </div>
+    <p class="hint" style="margin-top:8px;">أو الصق محتوى الملف هنا على طول:</p>
+    <textarea id="chPaste" rows="4" placeholder="الصق هنا..."></textarea>
+    <div class="navrow" style="margin-top:10px;">
+      <button class="add" id="chGo" type="button" style="margin-top:0;">📊 حلّل</button>
+      <button class="back" id="chClear" type="button">مسح</button>
+    </div>
+    <p class="hint" id="chStatus"></p>
+    <div id="chOut"></div>
+    <div class="navrow" style="margin-top:12px;">
+      <button class="back" type="button" data-go="4">→ السابق</button>
+    </div>
+  </div>
+
   <footer>
     مكوك بيشو — محرك الحل HiGHS مفتوح المصدر (رخصة MIT). الصفحة دي بتشتغل من غير إنترنت خالص، وكل بياناتك على جهازك بس.
-    <span id="verTag">النسخة 13</span>
+    <span id="verTag">النسخة 14</span>
   </footer>
 </div>
 
