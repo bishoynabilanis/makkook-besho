@@ -108,6 +108,28 @@
         template: currentTemplate, budget: budgetEl.value, hours: hoursEl.value, items: readItems(),
       }));
     } catch (e) {}
+    updateLiveBar();
+  }
+
+  // شريط الأرقام الحي: مجموع الأرباح + الميزانية + الساعات، بيتحدث مع أي تعديل
+  function updateLiveBar() {
+    try {
+      var items = readItems();
+      var sum = 0;
+      items.forEach(function (it) { sum += Number(it.profit) || 0; });
+      var lp = document.getElementById("lbProfit");
+      if (!lp) return;
+      var txt = fmt(sum);
+      if (lp.textContent !== txt) {
+        lp.textContent = txt;
+        if (!REDUCED) {
+          lp.classList.remove("tick"); void lp.offsetWidth; lp.classList.add("tick");
+          setTimeout(function () { lp.classList.remove("tick"); }, 200);
+        }
+      }
+      document.getElementById("lbBudget").textContent = fmt(Number(budgetEl.value) || 0);
+      document.getElementById("lbHours").textContent = fmt(Number(hoursEl.value) || 0);
+    } catch (e) {}
   }
   function loadState() {
     try {
@@ -640,8 +662,58 @@
   });
 
   if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (hadController) { location.reload(); }
+    });
     navigator.serviceWorker.register("sw.js").catch(function () {});
   }
+
+
+  // ---------- الحياة المحيطة: خلفية نيون هادئة في كل الشاشات ----------
+  (function ambient() {
+    var c = document.getElementById("bgCanvas");
+    if (REDUCED || !c || !c.getContext) return;
+    var g = c.getContext("2d");
+    var dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    var W = 0, H = 0;
+    function size() {
+      W = window.innerWidth; H = window.innerHeight;
+      c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    size();
+    window.addEventListener("resize", size);
+    var parts = [];
+    for (var i = 0; i < 12; i++) {
+      parts.push({ x: Math.random(), y: Math.random(), s: 0.006 + Math.random() * 0.012, r: 1 + Math.random() * 2.4, cyan: Math.random() < 0.6 });
+    }
+    var t0 = 0;
+    function frame(t) {
+      requestAnimationFrame(frame);
+      if (document.hidden) return;
+      if (t - t0 < 40) return; // ~25fps للموبايلات الضعيفة
+      t0 = t;
+      g.clearRect(0, 0, W, H);
+      // هالة كرة خافتة ورا الهيدر
+      var ox = W / 2, oy = 70;
+      var r = 30 + 7 * Math.sin(t / 800);
+      var grad = g.createRadialGradient(ox, oy, 1, ox, oy, r + 50);
+      grad.addColorStop(0, "rgba(34,216,238,.09)");
+      grad.addColorStop(1, "rgba(168,85,247,0)");
+      g.beginPath(); g.arc(ox, oy, r + 50, 0, 6.283); g.fillStyle = grad; g.fill();
+      // جسيمات نيون طالعة ببطء
+      parts.forEach(function (p) {
+        p.y -= p.s;
+        if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
+        g.beginPath();
+        g.arc(p.x * W, p.y * H, p.r, 0, 6.283);
+        g.fillStyle = p.cyan ? "rgba(34,216,238,.22)" : "rgba(168,85,247,.18)";
+        g.fill();
+      });
+    }
+    requestAnimationFrame(frame);
+  })();
 
   var bin = Uint8Array.from(atob(window.HIGHS_WASM_B64), function (c) { return c.charCodeAt(0); });
   window.HighsFactory({
