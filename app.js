@@ -274,10 +274,137 @@
   }
 
   function solveInstant() {
+    var viz0 = document.getElementById("searchViz");
+    if (viz0) viz0.classList.add("hidden");
+    neonStop();
     var d = compute();
     if (!d) return;
     renderResult(d, false);
     document.body.dataset.solved = "1";
+  }
+
+
+  // ---------- محرك النيون: كرة مضيئة وخيوط توصلها بالبنود ----------
+  var neonState = { raf: 0, running: false };
+  function neonStart(items) {
+    var canvas = document.getElementById("svCanvas");
+    if (REDUCED || !canvas.getContext) return null;
+    if (neonState.raf) cancelAnimationFrame(neonState.raf);
+    var dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    var W = canvas.clientWidth || 340, H = 190;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    var g = canvas.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var n = items.length;
+    var orb = { x: W / 2, y: H * 0.68 };
+    var R = Math.min(W * 0.44, 165);
+    var nodes = [];
+    for (var i = 0; i < n; i++) {
+      var ang = Math.PI + Math.PI * ((i + 0.5) / n); // مروحة فوق الكرة
+      nodes.push({ x: orb.x + R * Math.cos(ang), y: orb.y + R * 0.62 * Math.sin(ang), name: items[i].name });
+    }
+    var st = { g: g, W: W, H: H, orb: orb, nodes: nodes, cur: 0, flash: 0, particles: [], frame: 0, n: n };
+    neonState.running = true;
+    function quad(ox, oy, cxp, cyp, nx, ny, t) {
+      var u = 1 - t;
+      return { x: u * u * ox + 2 * u * t * cxp + t * t * nx, y: u * u * oy + 2 * u * t * cyp + t * t * ny };
+    }
+    function draw(t) {
+      if (!neonState.running) return;
+      st.frame++;
+      if (st.frame % 2 === 0) { neonState.raf = requestAnimationFrame(draw); return; } // ~30fps للموبايلات الضعيفة
+      g.clearRect(0, 0, W, H);
+      if (st.flash > 0) st.flash -= 0.03;
+      // الخيوط
+      for (var i = 0; i < n; i++) {
+        var nd = nodes[i];
+        var cxp = (orb.x + nd.x) / 2, cyp = Math.min(orb.y, nd.y) - 16;
+        var on = (st.cur >> i) & 1;
+        g.beginPath();
+        g.moveTo(orb.x, orb.y);
+        g.quadraticCurveTo(cxp, cyp, nd.x, nd.y);
+        if (on) {
+          g.strokeStyle = "rgba(84,255,159,.85)";
+          g.lineWidth = 1.6;
+          g.setLineDash([7, 9]);
+          g.lineDashOffset = -t / 40;
+          g.shadowColor = "#54ff9f"; g.shadowBlur = 7;
+        } else {
+          g.strokeStyle = "rgba(120,130,165,.18)";
+          g.lineWidth = 1;
+          g.setLineDash([]);
+          g.shadowBlur = 0;
+        }
+        g.stroke();
+      }
+      g.setLineDash([]); g.shadowBlur = 0;
+      // جسيمات بتطلع من الكرة على الخيوط
+      for (var p = st.particles.length - 1; p >= 0; p--) {
+        var pt = st.particles[p];
+        pt.t += 0.045;
+        if (pt.t >= 1) { st.particles.splice(p, 1); continue; }
+        var nd2 = nodes[pt.i];
+        var pos = quad(orb.x, orb.y, (orb.x + nd2.x) / 2, Math.min(orb.y, nd2.y) - 16, nd2.x, nd2.y, pt.t);
+        g.beginPath();
+        g.arc(pos.x, pos.y, 3, 0, 6.283);
+        g.fillStyle = "#e8fbff";
+        g.shadowColor = "#22d8ee"; g.shadowBlur = 10;
+        g.fill();
+        g.shadowBlur = 0;
+      }
+      // الكرة
+      var r = 15 + 2.5 * Math.sin(t / 280);
+      var grad = g.createRadialGradient(orb.x, orb.y, 1, orb.x, orb.y, r + 8);
+      grad.addColorStop(0, "#e8fbff");
+      grad.addColorStop(0.45, "#22d8ee");
+      grad.addColorStop(1, "rgba(168,85,247,.05)");
+      g.beginPath();
+      g.arc(orb.x, orb.y, r + 8, 0, 6.283);
+      g.fillStyle = grad;
+      g.shadowColor = "#22d8ee"; g.shadowBlur = 16;
+      g.fill();
+      g.shadowBlur = 0;
+      // موجة فرح عند اكتشاف أفضل
+      if (st.flash > 0) {
+        g.beginPath();
+        g.arc(orb.x, orb.y, r + (1 - st.flash) * 55, 0, 6.283);
+        g.strokeStyle = "rgba(124,224,163," + (st.flash * 0.7).toFixed(3) + ")";
+        g.lineWidth = 2;
+        g.stroke();
+      }
+      // العقد
+      g.textAlign = "center"; g.direction = "rtl"; g.font = "10px Tahoma";
+      for (var j = 0; j < n; j++) {
+        var nd3 = nodes[j];
+        var on2 = (st.cur >> j) & 1;
+        g.beginPath();
+        g.arc(nd3.x, nd3.y, on2 ? 6 : 4, 0, 6.283);
+        if (on2) { g.fillStyle = "#7ce0a3"; g.shadowColor = "#7ce0a3"; g.shadowBlur = 10; }
+        else { g.fillStyle = "rgba(150,150,165,.4)"; g.shadowBlur = 0; }
+        g.fill();
+        g.shadowBlur = 0;
+        if (n <= 7) {
+          g.fillStyle = on2 ? "#b9f5d2" : "rgba(154,154,165,.75)";
+          var nm = nd3.name.length > 14 ? nd3.name.slice(0, 13) + "…" : nd3.name;
+          g.fillText(nm, nd3.x, nd3.y - 10);
+        }
+      }
+      neonState.raf = requestAnimationFrame(draw);
+    }
+    neonState.raf = requestAnimationFrame(draw);
+    return st;
+  }
+  function neonBurst(st, mask) {
+    if (!st) return;
+    st.flash = 1;
+    for (var i = 0; i < st.n && st.particles.length < 24; i++) {
+      if ((mask >> i) & 1) st.particles.push({ i: i, t: 0 });
+    }
+  }
+  function neonStop() {
+    neonState.running = false;
+    if (neonState.raf) cancelAnimationFrame(neonState.raf);
+    neonState.raf = 0;
   }
 
   // ---------- البحث الحي: بنجرّب كل التركيبات قدام المستخدم ----------
@@ -309,6 +436,7 @@
     svBest.textContent = "0"; svProfit.textContent = "0"; svProg.style.width = "0%";
     svMsg.className = "sv-msg"; svMsg.textContent = "";
     viz.classList.remove("hidden");
+    var neon = neonStart(items);
     solveBtn.disabled = true;
     solveBtn.classList.add("thinking");
     solveBtn.textContent = "بيشتغل قدامك…";
@@ -338,6 +466,7 @@
         }
       }
       prevMask = mask;
+      if (neon) neon.cur = mask;
       svProfit.textContent = fmt(prof);
       var pc = budget > 0 ? (cost / budget) * 100 : (cost > 0 ? 101 : 0);
       var ph = hours > 0 ? (hrs / hours) * 100 : (hrs > 0 ? 101 : 0);
@@ -355,6 +484,7 @@
           svBestBox.classList.remove("bump"); void svBestBox.offsetWidth; svBestBox.classList.add("bump");
           svMsg.className = "sv-msg good";
           svMsg.textContent = "✓ دي أحسن تشكيلة لحد دلوقتي — " + fmt(prof) + " جنيه";
+          neonBurst(neon, mask);
         }
       } else {
         svMsg.className = "sv-msg bad";
@@ -369,7 +499,14 @@
       solveBtn.classList.remove("thinking");
       solveBtn.textContent = "احسب القرار الأمثل";
       solveBtn.disabled = false;
-      if (!d) return;
+      if (!d) { neonStop(); return; }
+      if (neon) {
+        var fm = 0;
+        d.ex.base.chosen.forEach(function (ci) { fm |= (1 << ci); });
+        neon.cur = fm;
+        neonBurst(neon, fm);
+        setTimeout(neonStop, 2000);
+      }
       document.getElementById("verdict").classList.remove("pop");
       void document.getElementById("verdict").offsetWidth;
       document.getElementById("verdict").classList.add("pop");
