@@ -6,6 +6,26 @@
   var SCN_KEY = "makkook-besho-scenarios-v1";
 
   var TEMPLATES = {
+    complex: {
+      title: "مصنع كامل — تجربة معقدة",
+      desc: "١٠ بنود وألف تركيبة — شوف المخ بيفكر إزاي",
+      budgetLabel: "ميزانية التشغيل (جنيه)",
+      hoursLabel: "ساعات التشغيل المتاحة",
+      th: { name: "الخط / المهمة", cost: "التكلفة", profit: "العائد", hours: "الساعات" },
+      budget: 2200, hours: 12,
+      items: [
+        { name: "خط تعبئة عصير", category: "تعبئة", cost: 800, profit: 1300, hours: 4 },
+        { name: "فرن مخبوزات", category: "مخبوزات", cost: 650, profit: 950, hours: 3 },
+        { name: "ماكينة طحن بن", category: "مشروبات", cost: 300, profit: 420, hours: 1 },
+        { name: "خط تغليف بلاستيك", category: "تغليف", cost: 500, profit: 700, hours: 2 },
+        { name: "خلاط صلصات", category: "معلبات", cost: 420, profit: 640, hours: 2 },
+        { name: "ماكينة ثلج", category: "تبريد", cost: 350, profit: 380, hours: 1 },
+        { name: "خط معكرونة", category: "مخبوزات", cost: 900, profit: 1450, hours: 5 },
+        { name: "معصرة زيت", category: "زيوت", cost: 550, profit: 800, hours: 3 },
+        { name: "ماكينة كبس علب", category: "معلبات", cost: 250, profit: 330, hours: 1 },
+        { name: "خط تعقيم زجاجات", category: "تعبئة", cost: 480, profit: 600, hours: 2 }
+      ]
+    },
     workshop: {
       title: "ورشة الصيانة",
       desc: "أنهي أجهزة تتصلح النهارده بأعلى ربح",
@@ -240,6 +260,39 @@
   var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 
+
+
+  // ---------- النسخة والتحديث التلقائي على نفس الرابط ----------
+  var APP_VERSION = "12";
+  var verTag = document.getElementById("verTag");
+  if (verTag) verTag.textContent = "النسخة " + APP_VERSION;
+  var updatePending = false;
+  function showUpdateBar() {
+    var b = document.getElementById("updatebar");
+    if (b) b.classList.remove("hidden");
+  }
+  var updateBar = document.getElementById("updatebar");
+  if (updateBar) {
+    updateBar.dataset.sfx = "1";
+    updateBar.addEventListener("click", function () { sfxTap(); location.reload(); });
+  }
+  function checkVersion() {
+    if (location.protocol.indexOf("http") !== 0) return;
+    fetch("version.json", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.v && String(j.v) !== APP_VERSION) {
+        if (document.hidden) { updatePending = true; }
+        else { showUpdateBar(); }
+      }
+    }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) {
+      if (updatePending) { location.reload(); }
+      else { checkVersion(); }
+    }
+  });
+  window.addEventListener("focus", checkVersion);
+  setTimeout(checkVersion, 2500);
 
   // ---------- شريط الأخطاء: أي خطأ في الصفحة يظهر نصه على الشاشة ----------
   function showErr(msg) {
@@ -590,6 +643,8 @@
       return c;
     });
     svBest.textContent = "0"; svProfit.textContent = "0"; svProg.style.width = "0%";
+    var svLog0 = document.getElementById("svLog");
+    if (svLog0) svLog0.innerHTML = "";
     svMsg.className = "sv-msg"; svMsg.textContent = "";
     viz.classList.remove("hidden");
     document.body.dataset.warp = "1";
@@ -600,60 +655,142 @@
     solveBtn.textContent = "بيشتغل قدامك…";
     var n = items.length;
     var total = Math.pow(2, n) - 1;
-    var MAXSTEPS = 96;
+    var MAXSTEPS = 340;
     var stride = Math.max(1, Math.ceil(total / MAXSTEPS));
     var steps = Math.ceil(total / stride);
-    var delay = Math.max(25, Math.min(120, Math.round(2800 / steps)));
-    svTitle.textContent = stride === 1
-      ? "بيجرّب كل التركيبات الممكنة واحدة واحدة…"
-      : "بيستعرض عينة من " + fmt(total) + " تركيبة — والمحرك بيحسمها كلها في الآخر…";
-    var bestProfit = -1, tried = 0, prevMask = -1, mask = 0;
-    function stepFn() {
-      mask += stride;
-      if (mask > total) { finish(); return; }
-      tried++;
-      var cost = 0, hrs = 0, prof = 0;
-      for (var i = 0; i < n; i++) {
-        var on = (mask >> i) & 1;
-        if (on) { cost += items[i].cost; hrs += items[i].hours; prof += items[i].profit; }
-        chipEls[i].classList.toggle("in", !!on);
-        chipEls[i].classList.toggle("out", !on);
-        if (prevMask >= 0 && (((mask ^ prevMask) >> i) & 1)) {
-          chipEls[i].classList.add("flip");
-          (function (el) { setTimeout(function () { el.classList.remove("flip"); }, 160); })(chipEls[i]);
+    var delay = Math.max(12, Math.min(150, Math.round(2600 / steps)));
+    var STAGES = 5;
+    function stageBase(i2) {
+      svProg.style.width = Math.round((i2 / STAGES) * 100) + "%";
+      sfxStep();
+    }
+
+    // ١) مسح البنود واحد واحد
+    svTitle.textContent = "١) مسح البنود واحد واحد…";
+    stageBase(0);
+    var scanI = 0;
+    (function scan() {
+      if (scanI > 0) chipEls[scanI - 1].classList.remove("scanning");
+      if (scanI >= n) { chipEls.forEach(function (c) { c.classList.remove("scanning"); }); pruneStage(); return; }
+      chipEls[scanI].classList.add("scanning");
+      svCount.textContent = (scanI + 1) + " / " + n + " بند";
+      scanI++;
+      setTimeout(scan, Math.max(70, Math.min(240, Math.round(750 / n))));
+    })();
+
+    // ٢) تقليم المستحيل — فحص حقيقي: البند اللي لوحده بيكسر القيود
+    function pruneStage() {
+      svTitle.textContent = "٢) تقليم المستحيل…";
+      stageBase(1);
+      var pruned = 0;
+      items.forEach(function (it, i2) {
+        if ((budget > 0 && Number(it.cost) > budget) || (hours > 0 && Number(it.hours) > hours)) {
+          chipEls[i2].classList.add("pruned");
+          pruned++;
         }
-      }
-      prevMask = mask;
-      if (neon) neon.cur = mask;
-      svProfit.textContent = fmt(prof);
-      var pc = budget > 0 ? (cost / budget) * 100 : (cost > 0 ? 101 : 0);
-      var ph = hours > 0 ? (hrs / hours) * 100 : (hrs > 0 ? 101 : 0);
-      svBarCost.style.width = Math.min(100, pc) + "%";
-      svBarHours.style.width = Math.min(100, ph) + "%";
-      svBarCost.classList.toggle("over", cost > budget);
-      svBarHours.classList.toggle("over", hrs > hours);
-      svCount.textContent = tried + " / " + (stride === 1 ? fmt(total) : steps) + " تركيبة";
-      svProg.style.width = Math.min(100, (tried / steps) * 100) + "%";
-      var over = cost > budget || hrs > hours;
-      if (!over) {
-        if (prof > bestProfit) {
-          bestProfit = prof;
-          sfxBest();
-          svBest.textContent = fmt(prof);
-          svBestBox.classList.remove("bump"); void svBestBox.offsetWidth; svBestBox.classList.add("bump");
-          svMsg.className = "sv-msg good";
-          svMsg.textContent = "✓ دي أحسن تشكيلة لحد دلوقتي — " + fmt(prof) + " جنيه";
-          neonBurst(neon, mask);
+      });
+      svMsg.className = "sv-msg";
+      svMsg.textContent = pruned > 0
+        ? "اتاستبعد " + pruned + " بند بيكسر القيود حتى لو لوحده"
+        : "مفيش بند مستحيل لوحده — الكل داخل البحث";
+      setTimeout(boundStage, 850);
+    }
+
+    // ٣) الحد الأعلى النظري — حساب جشع حقيقي بنسبة الربح للتكلفة
+    function boundStage() {
+      svTitle.textContent = "٣) حساب الحد الأعلى النظري…";
+      stageBase(2);
+      var sorted = items.slice().sort(function (a, b) {
+        return (Number(b.profit) / Math.max(1, Number(b.cost))) - (Number(a.profit) / Math.max(1, Number(a.cost)));
+      });
+      var rem = budget > 0 ? budget : 0, ub = 0;
+      sorted.forEach(function (it) {
+        var cst = Number(it.cost) || 0, prf = Number(it.profit) || 0;
+        if (cst <= 0) { ub += prf; return; }
+        var take = Math.min(cst, rem);
+        if (take > 0) { ub += prf * (take / cst); rem -= take; }
+      });
+      ub = Math.round(ub);
+      svMsg.className = "sv-msg";
+      svMsg.textContent = "أعلى ربح ممكن نظريًا (لو القيود اتجاهلت): " + fmt(ub) + " جنيه — القرار الحقيقي تحته أو بيساويه";
+      svBest.textContent = fmt(ub);
+      setTimeout(exploreStage, 900);
+    }
+
+    // ٤) استكشاف شجرة التركيبات — عدّ حقيقي على كل تركيبة
+    function exploreStage() {
+      stageBase(3);
+      svTitle.textContent = stride === 1
+        ? "٤) استكشاف شجرة التركيبات — كل تركيبة بتتفحص فعلًا…"
+        : "٤) استكشاف شجرة التركيبات — عينة حقيقية من " + fmt(total) + " تركيبة…";
+      var bestProfit = -1, tried = 0, prevMask = -1, mask = 0;
+      (function stepFn() {
+        mask += stride;
+        if (mask > total) { verifyStage(); return; }
+        tried++;
+        var cost = 0, hrs = 0, prof = 0;
+        for (var i2 = 0; i2 < n; i2++) {
+          var on = (mask >> i2) & 1;
+          if (on) { cost += items[i2].cost; hrs += items[i2].hours; prof += items[i2].profit; }
+          chipEls[i2].classList.toggle("in", !!on);
+          chipEls[i2].classList.toggle("out", !on);
+          if (prevMask >= 0 && (((mask ^ prevMask) >> i2) & 1)) {
+            chipEls[i2].classList.add("flip");
+            (function (el) { setTimeout(function () { el.classList.remove("flip"); }, 160); })(chipEls[i2]);
+          }
         }
-      } else {
-        svMsg.className = "sv-msg bad";
-        svMsg.textContent = "✗ التركيبة دي خارج القيود — " + (cost > budget ? "الفلوس مش مكفية" : "الوقت مش مكفي");
-      }
-      setTimeout(stepFn, delay);
+        prevMask = mask;
+        if (neon) neon.cur = mask;
+        svProfit.textContent = fmt(prof);
+        var pc = budget > 0 ? (cost / budget) * 100 : (cost > 0 ? 101 : 0);
+        var ph = hours > 0 ? (hrs / hours) * 100 : (hrs > 0 ? 101 : 0);
+        svBarCost.style.width = Math.min(100, pc) + "%";
+        svBarHours.style.width = Math.min(100, ph) + "%";
+        svBarCost.classList.toggle("over", cost > budget);
+        svBarHours.classList.toggle("over", hrs > hours);
+        svCount.textContent = "عُقدة " + tried + " / " + (stride === 1 ? fmt(total) : steps);
+        svProg.style.width = Math.min(96, ((3 + tried / steps) / STAGES) * 100) + "%";
+        var over = cost > budget || hrs > hours;
+        if (!over) {
+          if (prof > bestProfit) {
+            bestProfit = prof;
+            sfxBest();
+            svBest.textContent = fmt(prof);
+            svBestBox.classList.remove("bump"); void svBestBox.offsetWidth; svBestBox.classList.add("bump");
+            svMsg.className = "sv-msg good";
+            svMsg.textContent = "✓ دي أحسن تشكيلة لحد دلوقتي — " + fmt(prof) + " جنيه";
+            var svLog = document.getElementById("svLog");
+            if (svLog) {
+              var li = document.createElement("div");
+              var names = [];
+              for (var li2 = 0; li2 < n; li2++) { if ((mask >> li2) & 1) names.push(items[li2].name); }
+              li.className = "sv-log-row";
+              li.textContent = "حل رقم " + (svLog.children.length + 1) + ": " + names.join(" + ") + " — " + fmt(prof) + " جنيه";
+              svLog.insertBefore(li, svLog.firstChild);
+              while (svLog.children.length > 5) svLog.removeChild(svLog.lastChild);
+            }
+            neonBurst(neon, mask);
+          }
+        } else {
+          svMsg.className = "sv-msg bad";
+          svMsg.textContent = "✗ التركيبة دي خارج القيود — " + (cost > budget ? "الفلوس مش مكفية" : "الوقت مش مكفي");
+        }
+        setTimeout(stepFn, delay);
+      })();
+    }
+
+    // ٥) تحقق المحرك — الحل الرياضي الحقيقي بيأكد النتيجة
+    function verifyStage() {
+      stageBase(4);
+      svTitle.textContent = "٥) تحقق المحرك — HiGHS بيحسم رياضيًا…";
+      svMsg.className = "sv-msg";
+      svMsg.textContent = "المحرك بيحل النموذج الكامل ويأكد إن مفيش تركيبة أحسن من اللي اتختارت…";
+      setTimeout(finish, 600);
     }
     function finish() {
       document.body.dataset.warp = "";
       sfxWin();
+      svProg.style.width = "100%";
       svMsg.className = "sv-msg good";
       svMsg.textContent = "✓ خلص البحث — وده القرار الأمثل المتأكد منه";
       var d = compute();
@@ -674,7 +811,6 @@
       renderResult(d, true);
       setTimeout(function () { document.body.dataset.solved = "1"; }, 700);
     }
-    setTimeout(stepFn, 350);
   }
 
   function maybeResolve() {
@@ -815,7 +951,10 @@
     navigator.serviceWorker.addEventListener("controllerchange", function () {
       if (hadController) { location.reload(); }
     });
-    navigator.serviceWorker.register("sw.js").catch(function () {});
+    navigator.serviceWorker.register("sw.js").then(function (reg) {
+      reg.update();
+      window.addEventListener("focus", function () { reg.update(); });
+    }).catch(function () {});
   }
 
 
@@ -827,13 +966,30 @@
     var g = c.getContext("2d");
     var dpr = Math.min(1.5, window.devicePixelRatio || 1);
     var W = 0, H = 0;
+    var dbgEl = document.getElementById("dbg");
+    var dbgFrames = 0;
+    function dbg(extra) {
+      if (dbgEl) dbgEl.textContent = "cv " + c.width + "x" + c.height + " dpr" + dpr + " " + extra;
+    }
     function size() {
       W = window.innerWidth; H = window.innerHeight;
+      if (!W || !H) { setTimeout(size, 300); return; }
       c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     size();
     window.addEventListener("resize", size);
+    dbg(REDUCED ? "rm:1" : "ctx:ok");
+    var fg = document.getElementById("fgCanvas");
+    var fg2 = null;
+    try { fg2 = fg && fg.getContext ? fg.getContext("2d") : null; } catch (efg) { fg2 = null; }
+    function sizeFg() {
+      if (!fg2 || !W) return;
+      fg.width = Math.round(window.innerWidth * dpr); fg.height = Math.round(window.innerHeight * dpr);
+      fg2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    sizeFg();
+    window.addEventListener("resize", sizeFg);
     var SECTORS = {
       "1": { n1: [34, 216, 238],  n2: [168, 85, 247], sat: "rgba(103,232,249,.85)" },
       "2": { n1: [255, 167, 38],  n2: [244, 81, 30],  sat: "rgba(255,204,128,.85)" },
@@ -849,6 +1005,9 @@
     for (i = 0; i < 60; i++) wstars.push({ a: Math.random() * 6.28, z: Math.random() });
     var sats = [{ r: 2.1, sp: 0.0009, ph: 0, sz: 3 }, { r: 2.7, sp: -0.00055, ph: 2.2, sz: 2.2 }];
     var arts = [{ x: 0.12, y: 0.75, s: 9, sp: 0.0004, ph: 1 }, { x: 0.88, y: 0.55, s: 7, sp: 0.0006, ph: 3 }];
+    var threads = [];
+    for (i = 0; i < 3; i++) threads.push({ x: Math.random() * 1.3 - 0.3, sp: 0.00006 + Math.random() * 0.00008, tilt: 0.22 + Math.random() * 0.28 });
+    var comet = null;
     if (REDUCED) {
       // تقليل الحركة: فريم واحد ثابت — المنظر يفضل موجود من غير حركة
       try {
@@ -869,6 +1028,7 @@
         pb0.addColorStop(0, rgba(sec0.n1, 0.38)); pb0.addColorStop(1, rgba(sec0.n2, 0.12));
         g.fillStyle = pb0; g.beginPath(); g.arc(ox0, oy0, R0, 0, 6.283); g.fill();
       } catch (e0) { showErr("ambient-static: " + (e0.message || e0)); }
+      dbg("rm:1 static");
       return;
     }
     var t0 = 0;
@@ -909,6 +1069,7 @@
         var wg = g.createRadialGradient(cx, cy, 1, cx, cy, 120);
         wg.addColorStop(0, "rgba(255,255,255,.14)"); wg.addColorStop(1, "rgba(0,0,0,0)");
         g.fillStyle = wg; g.beginPath(); g.arc(cx, cy, 120, 0, 6.283); g.fill();
+        if (fg2) { try { fg2.clearRect(0, 0, W, H); } catch (ecf) {} }
         requestAnimationFrame(frame);
         return;
       }
@@ -954,10 +1115,47 @@
         g.fillStyle = rgba(sec.n1, 0.07); g.fill();
         g.restore();
       });
+
+      // ===== الطبقة الأمامية: خيوط ضوء ومذنّب فوق الواجهة =====
+      if (fg2) {
+        fg2.clearRect(0, 0, W, H);
+        threads.forEach(function (th, ti) {
+          th.x += dt * th.sp;
+          if (th.x > 1.35) th.x = -0.35;
+          var x0 = th.x * W, slope = W * th.tilt;
+          var grd = fg2.createLinearGradient(x0, -40, x0 + slope, H + 40);
+          grd.addColorStop(0, "rgba(0,0,0,0)");
+          grd.addColorStop(0.5, rgba(ti % 2 ? sec.n1 : sec.n2, 0.11));
+          grd.addColorStop(1, "rgba(0,0,0,0)");
+          fg2.beginPath(); fg2.moveTo(x0, -40); fg2.lineTo(x0 + slope, H + 40);
+          fg2.strokeStyle = grd; fg2.lineWidth = 1.6; fg2.stroke();
+        });
+        if (!comet && Math.random() < dt / 3800) {
+          comet = { x: Math.random() * W * 0.6 + W * 0.1, y: -30, vx: 0.16 + Math.random() * 0.12, vy: 0.3 + Math.random() * 0.16, life: 1 };
+        }
+        if (comet) {
+          comet.x += comet.vx * dt; comet.y += comet.vy * dt; comet.life -= dt / 1500;
+          if (comet.life <= 0 || comet.y > H + 60) { comet = null; }
+          else {
+            var tx = comet.x - comet.vx * 260, ty = comet.y - comet.vy * 260;
+            var cg = fg2.createLinearGradient(tx, ty, comet.x, comet.y);
+            cg.addColorStop(0, "rgba(0,0,0,0)");
+            cg.addColorStop(1, "rgba(255,255,255," + (0.34 * comet.life) + ")");
+            fg2.beginPath(); fg2.moveTo(tx, ty); fg2.lineTo(comet.x, comet.y);
+            fg2.strokeStyle = cg; fg2.lineWidth = 2; fg2.stroke();
+            fg2.beginPath(); fg2.arc(comet.x, comet.y, 6, 0, 6.283);
+            fg2.fillStyle = rgba(sec.n1, 0.25 * comet.life); fg2.fill();
+            fg2.beginPath(); fg2.arc(comet.x, comet.y, 2, 0, 6.283);
+            fg2.fillStyle = "rgba(255,255,255," + (0.6 * comet.life) + ")"; fg2.fill();
+          }
+        }
+      }
       } catch (ef) {
         if (!errOnce) { errOnce = true; showErr("ambient-frame: " + (ef.message || ef)); }
         return; // وقّف اللوب بدل تكرار الخطأ
       }
+      dbgFrames++;
+      if (dbgFrames % 20 === 1) dbg("f:" + dbgFrames + " st:" + (document.body.dataset.step || "?"));
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
