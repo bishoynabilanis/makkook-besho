@@ -63,6 +63,7 @@
 
   // ---------- البنود ----------
   function enableDrag(tr, handle) {
+    handle.addEventListener("touchstart", function (e) { e.preventDefault(); }, { passive: false });
     handle.addEventListener("pointerdown", function (e) {
       e.preventDefault();
       var startY = e.clientY;
@@ -238,6 +239,24 @@
 
   var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+
+
+  // ---------- شريط الأخطاء: أي خطأ في الصفحة يظهر نصه على الشاشة ----------
+  function showErr(msg) {
+    try {
+      var b = document.getElementById("errbar");
+      if (!b) return;
+      b.textContent = (b.classList.contains("hidden") ? "" : b.textContent + "\n") + String(msg).slice(0, 300);
+      b.classList.remove("hidden");
+    } catch (e) {}
+  }
+  window.addEventListener("error", function (e) {
+    showErr("ERR: " + (e.message || "?") + " @ " + String(e.filename || "").split("/").pop() + ":" + (e.lineno || 0));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e.reason;
+    showErr("REJ: " + ((r && r.message) || r || "?"));
+  });
 
   // ---------- الصوت: نغمات فضائية مولّدة (WebAudio، من غير ملفات) ----------
   var SOUND_KEY = "makkook-besho-sound";
@@ -804,7 +823,7 @@
   // ---------- الفضاء المحيط: سديم ونجوم وكوكب بحلقات وأقمار — لكل خطوة قطاع بلونه ----------
   (function ambient() {
     var c = document.getElementById("bgCanvas");
-    if (REDUCED || !c || !c.getContext) return;
+    if (!c || !c.getContext) { showErr("canvas: no 2d context"); return; }
     var g = c.getContext("2d");
     var dpr = Math.min(1.5, window.devicePixelRatio || 1);
     var W = 0, H = 0;
@@ -830,11 +849,34 @@
     for (i = 0; i < 60; i++) wstars.push({ a: Math.random() * 6.28, z: Math.random() });
     var sats = [{ r: 2.1, sp: 0.0009, ph: 0, sz: 3 }, { r: 2.7, sp: -0.00055, ph: 2.2, sz: 2.2 }];
     var arts = [{ x: 0.12, y: 0.75, s: 9, sp: 0.0004, ph: 1 }, { x: 0.88, y: 0.55, s: 7, sp: 0.0006, ph: 3 }];
+    if (REDUCED) {
+      // تقليل الحركة: فريم واحد ثابت — المنظر يفضل موجود من غير حركة
+      try {
+        var sec0 = sector();
+        var m0 = Math.max(W, H);
+        var ng0 = g.createRadialGradient(W / 2, H * 0.3, 10, W / 2, H * 0.3, m0 * 0.7);
+        ng0.addColorStop(0, rgba(sec0.n1, 0.09)); ng0.addColorStop(0.5, rgba(sec0.n2, 0.05)); ng0.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = ng0; g.fillRect(0, 0, W, H);
+        stars.forEach(function (s0) {
+          g.beginPath(); g.arc(s0.x * W, s0.y * H, s0.r, 0, 6.283);
+          g.fillStyle = "rgba(255,255,255,.45)"; g.fill();
+        });
+        var ox0 = W / 2, oy0 = H * 0.2, R0 = 46;
+        var halo0 = g.createRadialGradient(ox0, oy0, R0 * 0.3, ox0, oy0, R0 * 2.6);
+        halo0.addColorStop(0, rgba(sec0.n1, 0.18)); halo0.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = halo0; g.beginPath(); g.arc(ox0, oy0, R0 * 2.6, 0, 6.283); g.fill();
+        var pb0 = g.createRadialGradient(ox0 - R0 * 0.35, oy0 - R0 * 0.35, R0 * 0.1, ox0, oy0, R0);
+        pb0.addColorStop(0, rgba(sec0.n1, 0.38)); pb0.addColorStop(1, rgba(sec0.n2, 0.12));
+        g.fillStyle = pb0; g.beginPath(); g.arc(ox0, oy0, R0, 0, 6.283); g.fill();
+      } catch (e0) { showErr("ambient-static: " + (e0.message || e0)); }
+      return;
+    }
     var t0 = 0;
+    var errOnce = false;
     function frame(t) {
-      requestAnimationFrame(frame);
-      if (document.hidden) return;
-      if (t - t0 < 40) return; // ~25fps للموبايلات الضعيفة
+      if (document.hidden) { requestAnimationFrame(frame); return; }
+      if (t - t0 < 40) { requestAnimationFrame(frame); return; } // ~25fps للموبايلات الضعيفة
+      try {
       var dt = t - t0; t0 = t;
       var sec = sector();
       g.clearRect(0, 0, W, H);
@@ -843,10 +885,10 @@
       var nx = W * (0.5 + 0.25 * Math.sin(t / 9000)), ny = H * (0.3 + 0.15 * Math.cos(t / 11000));
       var m = Math.max(W, H);
       var ng = g.createRadialGradient(nx, ny, 10, nx, ny, m * 0.7);
-      ng.addColorStop(0, rgba(sec.n1, 0.07)); ng.addColorStop(0.5, rgba(sec.n2, 0.04)); ng.addColorStop(1, "rgba(0,0,0,0)");
+      ng.addColorStop(0, rgba(sec.n1, 0.10)); ng.addColorStop(0.5, rgba(sec.n2, 0.055)); ng.addColorStop(1, "rgba(0,0,0,0)");
       g.fillStyle = ng; g.fillRect(0, 0, W, H);
       var n2g = g.createRadialGradient(W - nx, H - ny, 10, W - nx, H - ny, m * 0.55);
-      n2g.addColorStop(0, rgba(sec.n2, 0.05)); n2g.addColorStop(1, "rgba(0,0,0,0)");
+      n2g.addColorStop(0, rgba(sec.n2, 0.07)); n2g.addColorStop(1, "rgba(0,0,0,0)");
       g.fillStyle = n2g; g.fillRect(0, 0, W, H);
 
       if (document.body.dataset.warp === "1") {
@@ -867,6 +909,7 @@
         var wg = g.createRadialGradient(cx, cy, 1, cx, cy, 120);
         wg.addColorStop(0, "rgba(255,255,255,.14)"); wg.addColorStop(1, "rgba(0,0,0,0)");
         g.fillStyle = wg; g.beginPath(); g.arc(cx, cy, 120, 0, 6.283); g.fill();
+        requestAnimationFrame(frame);
         return;
       }
 
@@ -874,7 +917,7 @@
       stars.forEach(function (s) {
         s.tw += dt * s.ts;
         g.beginPath(); g.arc(s.x * W, s.y * H, s.r, 0, 6.283);
-        g.fillStyle = "rgba(255,255,255," + (0.22 + 0.3 * Math.abs(Math.sin(s.tw))) + ")";
+        g.fillStyle = "rgba(255,255,255," + (0.35 + 0.4 * Math.abs(Math.sin(s.tw))) + ")";
         g.fill();
       });
 
@@ -911,6 +954,11 @@
         g.fillStyle = rgba(sec.n1, 0.07); g.fill();
         g.restore();
       });
+      } catch (ef) {
+        if (!errOnce) { errOnce = true; showErr("ambient-frame: " + (ef.message || ef)); }
+        return; // وقّف اللوب بدل تكرار الخطأ
+      }
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   })();
