@@ -110,7 +110,7 @@
   @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
   .tot b { display: block; }
   @media (prefers-reduced-motion: reduce) {
-    #svCanvas { display: none !important; }
+    #svCanvas, #bgCanvas { display: none !important; }
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .chip { opacity: 1 !important; }
   }
@@ -148,6 +148,23 @@
   .editrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 13.5px; color: var(--muted); }
   .editbtn { background: #1b1b22; border: 1px solid var(--orange); color: var(--orange); padding: 8px 14px; font-size: 13.5px; border-radius: 8px; }
 
+
+  /* ---------- حياة محيطة في كل الشاشات ---------- */
+  #bgCanvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .wrap { position: relative; z-index: 1; }
+  @keyframes floaty { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+  .templates button { animation: floaty 3.6s ease-in-out infinite alternate; }
+  .templates button:nth-child(2) { animation-delay: .7s; }
+  .templates button:nth-child(3) { animation-delay: 1.3s; }
+  @keyframes cardGlow { 0%, 100% { box-shadow: 0 0 0 rgba(244,81,30,0); } 50% { box-shadow: 0 0 20px rgba(244,81,30,.13); } }
+  .card { animation: cardGlow 5.5s ease-in-out infinite; }
+  @keyframes stepGlow { 0%, 100% { box-shadow: none; } 50% { box-shadow: 0 0 10px rgba(244,81,30,.35); } }
+  .stepper button.active b { animation: stepGlow 2s ease-in-out infinite; }
+  .livebar { display: flex; gap: 8px; margin-bottom: 14px; }
+  .lb { flex: 1; background: rgba(20,20,25,.88); border: 1px solid var(--line); border-radius: 10px; padding: 6px 4px; text-align: center; font-size: 11.5px; color: var(--muted); }
+  .lb b { display: block; font-size: 16px; color: #7ce0a3; transition: transform .15s; }
+  .lb b.tick { transform: scale(1.18); color: #b9f5d2; }
+
   footer { font-size: 12.5px; color: #6a6a75; text-align: center; margin-top: 18px; }
   @media (max-width: 520px) {
     header h1 { font-size: 20px; }
@@ -159,6 +176,7 @@
 </style>
 </head>
 <body>
+<canvas id="bgCanvas"></canvas>
 <div class="wrap">
   <header>
     <div class="logo"><i></i><i></i><i></i></div>
@@ -171,6 +189,12 @@
     <button type="button" data-step="2"><b>٢</b>القيود</button>
     <button type="button" data-step="3"><b>٣</b>الخطة</button>
     <button type="button" data-step="4"><b>٤</b>ليه وماذا لو</button>
+  </div>
+
+  <div class="livebar" id="livebar">
+    <div class="lb">ربح كل البنود<b id="lbProfit">0</b></div>
+    <div class="lb">ميزانيتك<b id="lbBudget">0</b></div>
+    <div class="lb">ساعاتك<b id="lbHours">0</b></div>
   </div>
 
   <!-- خطوة ١: البنود -->
