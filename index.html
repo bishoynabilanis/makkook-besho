@@ -113,6 +113,24 @@
     .chip { opacity: 1 !important; }
   }
 
+  /* ---------- تصوير البحث الحي ---------- */
+  .sv { border: 1px dashed #3a3a44; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: #101016; }
+  .sv-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .sv-chips .chip { animation: none; opacity: 1; background: #1b1b22; border-color: var(--line); color: var(--muted); transition: all .15s ease; }
+  .sv-chips .chip.in { background: #10241a; border-color: #2e7d4f; color: #7ce0a3; transform: scale(1.07); }
+  .sv-chips .chip.out { opacity: .35; text-decoration: line-through; }
+  .sv-chips .chip.flip { box-shadow: 0 0 12px rgba(244,81,30,.75); border-color: var(--orange); }
+  .sv-stats { display: flex; gap: 8px; margin: 8px 0 2px; }
+  .sv-stat { flex: 1; background: #1b1b22; border: 1px solid var(--line); border-radius: 8px; padding: 6px; text-align: center; font-size: 12px; color: var(--muted); }
+  .sv-stat b { display: block; font-size: 18px; color: var(--txt); }
+  .sv-best b { color: #7ce0a3; }
+  .sv-best.bump { animation: popIn .3s both; }
+  .sv-progress { height: 6px; margin-top: 8px; }
+  .sv-msg { font-size: 13px; margin-top: 6px; min-height: 20px; color: var(--muted); }
+  .sv-msg.good { color: #7ce0a3; }
+  .sv-msg.bad { color: #e57373; }
+  .bar i.over { background: linear-gradient(90deg, #c62828, #ef5350); }
+
   footer { font-size: 12.5px; color: #6a6a75; text-align: center; margin-top: 18px; }
   @media (max-width: 520px) {
     header h1 { font-size: 20px; }
@@ -188,6 +206,18 @@
   <div class="card step hidden" id="step-3">
     <h2><span>٠٣</span> القرار الأمثل</h2>
     <p class="hint">مش توصية ولا تخمين — ده أفضل قرار ممكن رياضيًا جوه قيودك، والبرنامج بيثبت ده.</p>
+    <div class="sv hidden" id="searchViz">
+      <div class="sv-head"><span id="svTitle">بيجرّب كل التركيبات…</span><span id="svCount"></span></div>
+      <div class="chips sv-chips" id="svChips"></div>
+      <div class="sv-stats">
+        <div class="sv-stat">ربح التركيبة الحالية<b id="svProfit">0</b></div>
+        <div class="sv-stat sv-best" id="svBestBox">أحسن ربح لحد دلوقتي<b id="svBest">0</b></div>
+      </div>
+      <div class="bar-row"><span>الفلوس</span><div class="bar"><i id="svBarCost"></i></div></div>
+      <div class="bar-row"><span>الوقت</span><div class="bar"><i id="svBarHours"></i></div></div>
+      <div class="bar sv-progress"><i id="svProg"></i></div>
+      <div class="sv-msg" id="svMsg"></div>
+    </div>
     <div id="resultCard">
       <div class="verdict" id="verdict">اضغط «احسب القرار الأمثل»</div>
       <div class="chips" id="planChips"></div>
