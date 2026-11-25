@@ -111,9 +111,13 @@
   @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
   .tot b { display: block; }
   @media (prefers-reduced-motion: reduce) {
-    #svCanvas, #bgCanvas { display: none !important; }
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .chip { opacity: 1 !important; }
+    /* طبقة الفضاء تفضل حية بلطف — بطلب المستخدم */
+    .css-stars { animation: cssTwinkle 6.5s ease-in-out infinite alternate !important; }
+    .css-planet { animation: cssPulse 8s ease-in-out infinite !important; }
+    .css-ring.r1 { animation: cssRing 18s linear infinite !important; }
+    .css-ring.r2 { animation: cssRing 26s linear infinite reverse !important; }
   }
 
 
@@ -440,7 +444,7 @@
 
   <footer>
     مكوك بيشو — محرك الحل HiGHS مفتوح المصدر (رخصة MIT). الصفحة دي بتشتغل من غير إنترنت خالص، وكل بياناتك على جهازك بس.
-    <span id="verTag">النسخة 12</span>
+    <span id="verTag">النسخة 13</span>
   </footer>
 </div>
 
