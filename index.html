@@ -222,6 +222,65 @@
     white-space: pre-wrap; word-break: break-word;
   }
 
+
+  /* ---------- طبقة فضاء CSS خالصة (ضمان إن المنظر يظهر حتى لو الكانفس فشل) ---------- */
+  .css-space { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: hidden; }
+  .css-nebula { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  body[data-step="1"] .css-nebula { background: radial-gradient(circle at 50% 28%, rgba(34,216,238,.10), rgba(168,85,247,.05) 45%, transparent 70%), radial-gradient(circle at 80% 85%, rgba(168,85,247,.07), transparent 55%); }
+  body[data-step="2"] .css-nebula { background: radial-gradient(circle at 50% 28%, rgba(255,167,38,.10), rgba(244,81,30,.05) 45%, transparent 70%), radial-gradient(circle at 80% 85%, rgba(244,81,30,.07), transparent 55%); }
+  body[data-step="3"] .css-nebula { background: radial-gradient(circle at 50% 28%, rgba(236,64,122,.10), rgba(34,216,238,.05) 45%, transparent 70%), radial-gradient(circle at 80% 85%, rgba(34,216,238,.07), transparent 55%); }
+  body[data-step="4"] .css-nebula { background: radial-gradient(circle at 50% 28%, rgba(124,224,163,.10), rgba(255,213,79,.05) 45%, transparent 70%), radial-gradient(circle at 80% 85%, rgba(255,213,79,.07), transparent 55%); }
+  .css-stars { position: absolute; top: 0; left: 0; width: 2px; height: 2px; border-radius: 50%; background: rgba(255,255,255,.9);
+    box-shadow: 169px 158px 0 0 rgba(255,255,255,0.8), 337px 53px 0 0 rgba(255,255,255,0.5), 278px 100px 0 0 rgba(255,255,255,0.7), 302px 63px 0 0 rgba(255,255,255,0.9), 113px 42px 0 0 rgba(255,255,255,0.5), 226px 432px 0 0 rgba(255,255,255,0.5), 127px 96px 0 0 rgba(255,255,255,0.9), 221px 64px 0 0 rgba(255,255,255,0.9), 67px 232px 0 0 rgba(255,255,255,0.9), 35px 594px 0 0 rgba(255,255,255,0.9), 207px 54px 0 0 rgba(255,255,255,0.6), 27px 574px 0 0 rgba(255,255,255,0.6), 152px 433px 0 0 rgba(255,255,255,0.6), 280px 124px 0 0 rgba(255,255,255,0.9), 161px 577px 0 0 rgba(255,255,255,0.6), 56px 599px 0 0 rgba(255,255,255,0.9), 331px 196px 0 0 rgba(255,255,255,0.7), 53px 564px 0 0 rgba(255,255,255,0.5), 292px 65px 0 0 rgba(255,255,255,0.9), 109px 512px 0 0 rgba(255,255,255,0.9), 222px 325px 0 0 rgba(255,255,255,0.8), 303px 468px 0 0 rgba(255,255,255,0.7), 157px 258px 0 0 rgba(255,255,255,0.6), 361px 253px 0 0 rgba(255,255,255,0.5), 298px 311px 0 0 rgba(255,255,255,0.9), 257px 355px 0 0 rgba(255,255,255,0.8), 151px 627px 0 0 rgba(255,255,255,0.5), 64px 528px 0 0 rgba(255,255,255,0.8), 88px 779px 0 0 rgba(255,255,255,0.7), 81px 504px 0 0 rgba(255,255,255,0.8), 24px 688px 0 0 rgba(255,255,255,0.5), 289px 590px 0 0 rgba(255,255,255,0.7), 178px 715px 0 0 rgba(255,255,255,0.7), 308px 512px 0 0 rgba(255,255,255,0.9), 237px 74px 0 0 rgba(255,255,255,0.5);
+    animation: cssTwinkle 3.2s ease-in-out infinite alternate; }
+  @keyframes cssTwinkle { from { opacity: .45; } to { opacity: 1; } }
+  .css-planet { position: absolute; top: 13%; left: 50%; width: 92px; height: 92px; margin-left: -46px; border-radius: 50%;
+    animation: cssPulse 4.5s ease-in-out infinite; }
+  body[data-step="1"] .css-planet { background: radial-gradient(circle at 35% 35%, rgba(103,232,249,.4), rgba(168,85,247,.12) 70%); box-shadow: 0 0 46px 10px rgba(34,216,238,.16); }
+  body[data-step="2"] .css-planet { background: radial-gradient(circle at 35% 35%, rgba(255,204,128,.4), rgba(244,81,30,.12) 70%); box-shadow: 0 0 46px 10px rgba(255,167,38,.16); }
+  body[data-step="3"] .css-planet { background: radial-gradient(circle at 35% 35%, rgba(244,143,177,.4), rgba(34,216,238,.12) 70%); box-shadow: 0 0 46px 10px rgba(236,64,122,.16); }
+  body[data-step="4"] .css-planet { background: radial-gradient(circle at 35% 35%, rgba(200,230,201,.4), rgba(255,213,79,.12) 70%); box-shadow: 0 0 46px 10px rgba(124,224,163,.16); }
+  @keyframes cssPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  .css-ring { position: absolute; border-radius: 50%; animation: cssRing 9s linear infinite; }
+  .css-ring.r1 { top: 24px; left: -26px; width: 144px; height: 44px; border: 1.5px solid rgba(168,85,247,.22); }
+  .css-ring.r2 { top: 16px; left: -38px; width: 168px; height: 58px; border: 1px solid rgba(34,216,238,.15); animation-duration: 14s; animation-direction: reverse; }
+  @keyframes cssRing { from { transform: rotate(-12deg); } to { transform: rotate(348deg); } }
+
+  /* سطر تشخيص صغير على الشاشة */
+  #dbg { position: fixed; bottom: 2px; left: 4px; z-index: 100; direction: ltr;
+    font-size: 10px; color: rgba(255,255,255,.5); background: rgba(0,0,0,.4);
+    padding: 1px 6px; border-radius: 5px; pointer-events: none; font-family: monospace; }
+
+
+  /* بانر النسخة الجديدة */
+  #updatebar {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 101;
+    background: var(--orange); color: #fff; border-radius: 999px; border: none;
+    padding: 9px 18px; font-size: 14px; font-family: inherit; cursor: pointer;
+    box-shadow: 0 4px 18px rgba(244,81,30,.45);
+    animation: cssPulse 2s ease-in-out infinite;
+  }
+  #verTag { display: block; font-size: 11px; color: #4a4a55; margin-top: 4px; }
+
+
+  /* ---------- طبقة أمامية: خيوط ضوء ومذنّبات فوق الواجهة (شفافة، مبتمنعش اللمس) ---------- */
+  #fgCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+
+  /* لوحات زجاجية شفافة عشان الضوء يعدّي من خلالها */
+  .card { background: rgba(22,22,30,.74); }
+  #itemsTable tbody tr { background: rgba(22,22,29,.78); }
+  .lb { background: rgba(18,18,24,.7); }
+  .templates button { background: rgba(27,27,34,.78); }
+  input { background: rgba(27,27,34,.82); }
+  .stepper button { background: rgba(24,24,31,.72); }
+  .chip.scanning { border-color: #ffd54f !important; box-shadow: 0 0 10px rgba(255,213,79,.55); transform: scale(1.07); }
+  .chip.pruned { opacity: .35; filter: grayscale(.7); text-decoration: line-through; }
+  .sv-truth { font-size: 11px; color: #5a5a66; margin-top: 8px; text-align: center; }
+
+
+  .sv-log { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .sv-log-row { font-size: 12px; color: #9be8b4; background: rgba(20,40,28,.55); border: 1px solid rgba(60,140,90,.25); border-radius: 8px; padding: 4px 8px; animation: rowIn .3s ease; }
+
   footer { font-size: 12.5px; color: #6a6a75; text-align: center; margin-top: 18px; }
   @media (max-width: 520px) {
     header h1 { font-size: 20px; }
@@ -233,9 +292,17 @@
 </style>
 </head>
 <body>
+<div class="css-space" aria-hidden="true">
+  <div class="css-nebula"></div>
+  <div class="css-stars"></div>
+  <div class="css-planet"><div class="css-ring r1"></div><div class="css-ring r2"></div></div>
+</div>
 <canvas id="bgCanvas"></canvas>
+<canvas id="fgCanvas"></canvas>
+<div id="dbg"></div>
 <div class="hudframe"></div>
 <div id="errbar" class="hidden"></div>
+<button type="button" id="updatebar" class="hidden">في نسخة جديدة — دوس للتحديث 🔄</button>
 <div class="wrap">
   <header>
     <div class="logo"><i></i><i></i><i></i></div>
@@ -320,6 +387,8 @@
       <div class="bar-row"><span>الوقت</span><div class="bar"><i id="svBarHours"></i></div></div>
       <div class="bar sv-progress"><i id="svProg"></i></div>
       <div class="sv-msg" id="svMsg"></div>
+      <div class="sv-log" id="svLog"></div>
+      <div class="sv-truth">العدّاد بيمر على تركيبات حقيقية، والقرار النهائي من محرك HiGHS بالرياضيات — مفيش أرقام تمثيل.</div>
     </div>
     <div id="resultCard">
       <div class="verdict" id="verdict">اضغط «احسب القرار الأمثل»</div>
@@ -371,6 +440,7 @@
 
   <footer>
     مكوك بيشو — محرك الحل HiGHS مفتوح المصدر (رخصة MIT). الصفحة دي بتشتغل من غير إنترنت خالص، وكل بياناتك على جهازك بس.
+    <span id="verTag">النسخة 12</span>
   </footer>
 </div>
 
