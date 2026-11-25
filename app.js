@@ -263,7 +263,7 @@
 
 
   // ---------- النسخة والتحديث التلقائي على نفس الرابط ----------
-  var APP_VERSION = "14";
+  var APP_VERSION = "15";
   var verTag = document.getElementById("verTag");
   if (verTag) verTag.textContent = "النسخة " + APP_VERSION;
   var updatePending = false;
@@ -1292,6 +1292,14 @@
         if ((h[1] || "").toLowerCase() === "content" || h[1] === "المحتوى") return { kind: "chart", h: h, rows: rows.slice(1) };
         return { kind: "totals", h: h, rows: rows.slice(1) };
       }
+      if (low0 === "traffic source") return { kind: "traffic", h: h, rows: rows.slice(1) };
+      if (low0 === "geography" || low0 === "cities") return { kind: "geo", h: h, rows: rows.slice(1) };
+      if (low0 === "device type" || low0 === "operating system") return { kind: "device", h: h, rows: rows.slice(1) };
+      if (low0 === "viewer age" || low0 === "viewer gender") return { kind: "demo", h: h, rows: rows.slice(1) };
+      if (low0 === "new and returning viewers" || low0 === "audience by watch behavior") return { kind: "newret", h: h, rows: rows.slice(1) };
+      if (low0 === "playback location" || low0 === "content type") return { kind: "playback", h: h, rows: rows.slice(1) };
+      if (low0 === "date_end_time_utc" && colIdx(h, ["page_daily_unfollows_unique", "page_follows"]) >= 0)
+        return { kind: "fbextra", h: h, rows: rows.slice(1) };
       if (colIdx(h, ["post_id"]) >= 0 && colIdx(h, ["created_time_utc", "status_type"]) >= 0)
         return { kind: "fbgraph", h: h, rows: rows.slice(1) };
       if (colIdx(h, ["date_end_time_utc"]) >= 0 && colIdx(h, ["page_media_view", "page_post_engagements"]) >= 0)
@@ -1429,6 +1437,18 @@
           var wavg = wsum / isum;
           if (wavg < 4) V.push(["ظبّط", "المصغرات والعناوين — نسبة النقر " + fmtN(wavg) + "% من " + fmtN(isum) + " ظهور (الصحي 4%+). مصغرة بوجه/رقم كبير وعنوان فيه فضول.", rows.length]);
           else V.push(["اعمل", "نسبة النقر " + fmtN(wavg) + "% — المصغرات شغالة، متبوظهاش.", rows.length]);
+        }
+        if (iCtr >= 0 && ret.length && iTitle >= 0) {
+          var over = [], gems = [];
+          rows.forEach(function (r, k) {
+            var cv = pctV(r[iCtr]); if (cv == null || ret[k] == null) return;
+            var im = iImpr >= 0 ? num(r[iImpr]) : null;
+            if (im != null && im < 20) return;
+            if (cv >= 4 && ret[k] < 30) over.push([cv, k]);
+            if (ret[k] >= 50 && cv < 2) gems.push([ret[k], k]);
+          });
+          if (over.length) V.push(["ظبّط", fmtN(over.length) + " فيديو المصغرة بتوعد أكتر من المحتوى (نقر عالي بس احتفاظ أقل من ٣٠% — زي «" + esc(String(rows[over[0][1]][iTitle]).slice(0, 40)) + "»). المصغرة/العنوان بيبيعوا حاجة الفيديو مش بيسلّمها — وفّي الوعد أو خفّفه.", over.length]);
+          if (gems.length) V.push(["اعمل", fmtN(gems.length) + " كنز مخفي: احتفاظ ٥٠٪+ بس نقر أقل من ٢٪ — زي «" + esc(String(rows[gems[0][1]][iTitle]).slice(0, 40)) + "». المحتوى كويس والمصغرة بتضيّعه — جدّد المصغرة والعنوان بس.", gems.length]);
         }
         if (is && is.med < 100 && rows.length >= 5) {
           V.push(["خد بالك", "يوتيوب مش بيعرض فيديوهاتك كفاية (وسط " + fmtN(is.med) + " ظهور للفيديو) — القناة محتاجة عناوين فيها كلمات الناس بتدوّر عليها فعلًا، ونشر ثابت.", rows.length]);
@@ -1614,6 +1634,177 @@
           "<p>الأقل:</p><ul>" + idx.slice(-3).reverse().map(function (p) { return "<li>" + esc(String(rows[p[1]][iText]).slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>";
       }
       return verdictCard(V) + card("📘 التفاصيل (" + esc(fname) + ")", detail);
+    }
+
+    // ---- أسماء مقروءة للمقاييس الجديدة ----
+    var COUNTRY = { EG: "مصر", IQ: "العراق", AE: "الإمارات", SA: "السعودية", DZ: "الجزائر", MA: "المغرب", JO: "الأردن", KW: "الكويت", LY: "ليبيا", SD: "السودان", SY: "سوريا", TN: "تونس", YE: "اليمن", OM: "عمان", BH: "البحرين", QA: "قطر", PS: "فلسطين", LB: "لبنان", US: "أمريكا", GB: "بريطانيا", DE: "ألمانيا", FR: "فرنسا", TR: "تركيا", IN: "الهند", PK: "باكستان" };
+    var SRC = { "shorts feed": "الشورتس فيد", "browse features": "الاستكشاف", "suggested videos": "الفيديوهات المقترحة", "youtube search": "بحث يوتيوب", "direct or unknown": "مباشر/مجهول", "external": "خارجي", "channel pages": "صفحة القناة", "notifications": "الإشعارات", "playlists": "قوائم التشغيل", "other youtube features": "مميزات يوتيوب الأخرى", "youtube watch page": "صفحة المشاهدة", "embedded in external websites and apps": "مواقع خارجية", "shorts": "شورتس", "videos": "فيديوهات عادية", "posts": "منشورات", "mobile phone": "موبايل", "computer": "كمبيوتر", "tablet": "تابلت", "tv": "تلفزيون" };
+    function niceName(x) { var k = String(x || "").trim().toLowerCase(); return SRC[k] || COUNTRY[String(x || "").trim().toUpperCase()] || String(x || "").trim(); }
+
+    // ---- تقارير الاستوديو المتقدمة: مصادر الزيارات ----
+    function splitTotal(rows, iLabel) {
+      var total = null, body = [];
+      rows.forEach(function (r) {
+        if (!r || !String(r[iLabel] || "").trim()) return;
+        if (String(r[iLabel]).trim().toLowerCase() === "total") total = r; else body.push(r);
+      });
+      return { total: total, body: body };
+    }
+    function analyzeTraffic(h, rows, fname) {
+      var iSrc = 0, iV = colIdx(h, ["views", "المشاهدات"]), iDur = colIdx(h, ["average view duration", "متوسط مدة المشاهدة"]);
+      var iImpr = colIdx(h, ["thumbnail impressions", "impressions"]), iCtr = colIdx(h, ["click-through rate", "نسبة النقر"]);
+      var sp = splitTotal(rows, iSrc), V = [];
+      var totV = sp.total && iV >= 0 ? num(sp.total[iV]) : sp.body.reduce(function (a, r) { return a + (num(r[iV]) || 0); }, 0);
+      if (!sp.body.length || !totV) return card("📡 مصادر الزيارات (" + esc(fname) + ")", "<p>مفيش بيانات مصادر لسه.</p>");
+      function share(r) { return (num(r[iV]) || 0) / totV * 100; }
+      var shorts = sp.body.filter(function (r) { return String(r[iSrc]).toLowerCase() === "shorts feed"; })[0];
+      var search = sp.body.filter(function (r) { return String(r[iSrc]).toLowerCase() === "youtube search"; })[0];
+      var sugg = sp.body.filter(function (r) { return String(r[iSrc]).toLowerCase() === "suggested videos"; })[0];
+      if (shorts && share(shorts) > 70) V.push(["خد بالك", fmtN(Math.round(share(shorts))) + "% من المشاهدات من الشورتس فيد — مصدر واحد ماسك القناة. البحث والمقترح هما اللي بيبنوا جمهور ثابت.", Math.round(totV)]);
+      if (search) {
+        var sCtr = iCtr >= 0 ? pctV(search[iCtr]) : null;
+        if (share(search) < 5) V.push(["ظبّط", "بحث يوتيوب جايب " + fmtN(num(search[iV]) || 0) + " مشاهدة بس (" + Math.round(share(search)) + "%) — العناوين ناقصها كلمات الناس بتدوّر عليها فعلًا (مثال: «غسالة مش بتصرف» مش «حلقة جديدة»).", Math.round(totV)]);
+        if (sCtr != null && sCtr >= 6) V.push(["اعمل", "نسبة النقر من البحث " + fmtN(sCtr) + "% — اللي بيلاقيك في البحث بيدوس. زوّد عناوين فيها كلمات بحث (إزاي/طريقة/مش + عطل).", num(search[iImpr]) || Math.round(totV)]);
+      }
+      if (sugg && iDur >= 0) {
+        var d = hms(sugg[iDur]);
+        if (d != null && d >= 90 && (num(sugg[iV]) || 0) >= 20) V.push(["اعمل", "اللي بيجيلك من «المقترح» بيقعد " + fmtN(Math.round(d / 60)) + " دقيقة+ — يوتيوب بيقترح المحتوى الطويل اللي بيمسك. اعمل نسخ طويلة من الشورتس الناجح.", num(sugg[iV]) || 0]);
+      }
+      var rowsHtml = sp.body.sort(function (a, b) { return (num(b[iV]) || 0) - (num(a[iV]) || 0); }).map(function (r) {
+        return [niceName(r[iSrc]), fmtN(num(r[iV]) || 0) + (totV ? " (" + Math.round(share(r)) + "%)" : "")];
+      });
+      var detail = "<p class='dim'>اتعرف على: مصادر الزيارات (" + esc(fname) + ") — " + fmtN(Math.round(totV)) + " مشاهدة.</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("📡 مصادر الزيارات (" + esc(fname) + ")", detail);
+    }
+
+    // ---- الجغرافيا × الجمهور المستهدف ----
+    function analyzeGeo(h, rows, fname) {
+      var iG = 0, iName = colIdx(h, ["city name"]), iV = colIdx(h, ["views", "المشاهدات"]);
+      var sp = splitTotal(rows, iG), V = [];
+      var totV = sp.total ? num(sp.total[iV]) : sp.body.reduce(function (a, r) { return a + (num(r[iV]) || 0); }, 0);
+      if (!sp.body.length || !totV) return card("🌍 الجغرافيا (" + esc(fname) + ")", "<p>يوتيوب لسه مش مخزّن بيانات أماكن (القناة صغيرة).</p>");
+      var isCity = iName >= 0;
+      if (!isCity) {
+        var eg = sp.body.filter(function (r) { return String(r[iG]).trim().toUpperCase() === "EG"; })[0];
+        var top = sp.body.slice().sort(function (a, b) { return (num(b[iV]) || 0) - (num(a[iV]) || 0); })[0];
+        var egV = eg ? num(eg[iV]) || 0 : 0, egPct = egV / totV * 100;
+        if (top && String(top[iG]).trim().toUpperCase() !== "EG" && egPct < 30) {
+          V.push(["ظبّط", "جمهورك مش مصري: مصر " + Math.round(egPct) + "% بس (" + fmtN(egV) + " مشاهدة)، وأغلب المشاهدات من " + niceName(top[iG]) + " (" + fmtN(num(top[iV]) || 0) + "). لو هدفك السوق المصري: لهجة مصرية صريحة في العنوان، أسعار بالجنيه، وأمثلة من السوق المصري. لو جمهورك العربي عادي — كمّل زي ما إنت.", Math.round(totV)]);
+        } else if (eg && egPct >= 40) {
+          V.push(["اعمل", "جمهورك مصري في الصميم (" + Math.round(egPct) + "%) — استهدافك مظبوط، كمّل بنفس اللهجة والأمثلة.", Math.round(totV)]);
+        }
+      }
+      var rowsHtml = sp.body.slice(0, 5).map(function (r) { return [isCity ? String(r[iName] || r[iG]) : niceName(r[iG]), fmtN(num(r[iV]) || 0)]; });
+      var detail = "<p class='dim'>اتعرف على: " + (isCity ? "المدن" : "الدول") + " (" + esc(fname) + ").</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("🌍 " + (isCity ? "المدن" : "الجغرافيا") + " (" + esc(fname) + ")", detail);
+    }
+
+    // ---- الأجهزة وأنظمة التشغيل ----
+    function analyzeDevice(h, rows, fname) {
+      var iD = 0, iV = colIdx(h, ["views", "المشاهدات"]), iDur = colIdx(h, ["average view duration", "متوسط مدة المشاهدة"]);
+      var sp = splitTotal(rows, iD), V = [];
+      var totV = sp.total ? num(sp.total[iV]) : sp.body.reduce(function (a, r) { return a + (num(r[iV]) || 0); }, 0);
+      if (!sp.body.length || !totV) return card("📱 الأجهزة (" + esc(fname) + ")", "<p>مفيش بيانات أجهزة لسه.</p>");
+      var mob = sp.body.filter(function (r) { return String(r[iD]).toLowerCase().indexOf("mobile") >= 0 || String(r[iD]).toLowerCase().indexOf("android") >= 0 || String(r[iD]).toLowerCase() === "ios"; });
+      var mobV = mob.reduce(function (a, r) { return a + (num(r[iV]) || 0); }, 0);
+      if (mobV / totV > 0.6) V.push(["اعمل", fmtN(Math.round(mobV / totV * 100)) + "% بيتفرجوا من الموبايل — صوّر رأسي، خط كبير، وجرّب الفيديو على موبايل قبل النشر.", Math.round(totV)]);
+      var comp = sp.body.filter(function (r) { return String(r[iD]).toLowerCase().indexOf("computer") >= 0 || String(r[iD]).toLowerCase().indexOf("windows") >= 0; })[0];
+      if (comp && iDur >= 0) {
+        var cd = hms(comp[iDur]), all = sp.body.map(function (r) { return hms(r[iDur]); }).filter(function (x) { return x != null; });
+        var avg = all.reduce(function (a, b) { return a + b; }, 0) / Math.max(all.length, 1);
+        if (cd != null && cd < avg * 0.5 && (num(comp[iV]) || 0) >= 10) V.push(["خد بالك", "جمهور الكمبيوتر بيقفل بسرعة (وسط " + cd + " ثانية) — الشورتس مش مكانها الديسكتوب؛ متقلقش منهم.", num(comp[iV]) || 0]);
+      }
+      var rowsHtml = sp.body.map(function (r) { return [niceName(r[iD]), fmtN(num(r[iV]) || 0)]; });
+      var detail = "<p class='dim'>اتعرف على: الأجهزة/الأنظمة (" + esc(fname) + ").</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("📱 الأجهزة (" + esc(fname) + ")", detail);
+    }
+
+    // ---- السن والنوع ----
+    function analyzeDemo(h, rows, fname) {
+      var iL = 0, iVp = colIdx(h, ["views (%)", "views"]), iPct = colIdx(h, ["average percentage viewed", "متوسط النسبة المئوية للمشاهدة"]);
+      var body = rows.filter(function (r) { return r && String(r[iL] || "").trim() && String(r[iL]).trim().toLowerCase() !== "total"; });
+      if (!body.length) return card("👤 الجمهور (" + esc(fname) + ")", "<p>يوتيوب مش مدّي بيانات سن/نوع لسه — بتحتاج قاعدة مشاهدين أكبر.</p>");
+      var V = [];
+      var top = body.slice().sort(function (a, b) { return (pctV(b[iVp]) || 0) - (pctV(a[iVp]) || 0); })[0];
+      if (top && iVp >= 0) {
+        var label = String(top[iL]).trim();
+        var labelAr = label.toLowerCase() === "male" ? "رجالة" : label.toLowerCase() === "female" ? "ستات" : label;
+        var ret = iPct >= 0 ? pctV(top[iPct]) : null;
+        V.push(["خد بالك", "أغلب جمهورك «" + labelAr + "» (" + fmtN(pctV(top[iVp])) + "% من المشاهدات" + (ret != null ? "، بيشوفوا " + fmtN(ret) + "% من الفيديو" : "") + ") — اكتب للجمهور ده، مش لجمهور تتمنّاه.", Math.round(pctV(top[iVp]) || 0)]);
+      }
+      var rowsHtml = body.map(function (r) { return [String(r[iL]).trim(), fmtN(pctV(r[iVp]) || 0) + "%"]; });
+      var detail = "<p class='dim'>اتعرف على: توزيع الجمهور (" + esc(fname) + ").</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("👤 الجمهور (" + esc(fname) + ")", detail);
+    }
+
+    // ---- جدد × راجعين على مستوى القناة ----
+    function analyzeNewRet(h, rows, fname) {
+      var iL = 0, iImpr = colIdx(h, ["thumbnail impressions", "impressions"]), iCtr = colIdx(h, ["click-through rate", "نسبة النقر"]), iV = colIdx(h, ["views", "المشاهدات"]);
+      var body = rows.filter(function (r) { return r && String(r[iL] || "").trim() && String(r[iL]).trim().toLowerCase() !== "total"; });
+      var tot = rows.filter(function (r) { return r && String(r[iL] || "").trim().toLowerCase() === "total"; })[0];
+      if (!body.length || body.every(function (r) { return !(num(r[iImpr]) || num(r[iV])); }))
+        return card("🔁 جدد × راجعين (" + esc(fname) + ")", "<p>الملف فاضي — يوتيوب لسه مش مقسّم الجمهور (قناة صغيرة).</p>");
+      var V = [];
+      var nw = body.filter(function (r) { return String(r[iL]).toLowerCase().indexOf("new") >= 0; })[0];
+      var rt = body.filter(function (r) { return String(r[iL]).toLowerCase().indexOf("return") >= 0; })[0];
+      if (nw && rt && iCtr >= 0) {
+        var nC = pctV(nw[iCtr]), rC = pctV(rt[iCtr]);
+        if (nC != null && rC != null && nC > 0 && rC > nC * 3) V.push(["اعمل", "الراجعين بيدوسوا على المصغرة " + fmtN(Math.round(rC / nC)) + "× أكتر من الجدد (" + fmtN(rC) + "% مقابل " + fmtN(nC) + "%) — جمهورك الراجع دهب: سلسلة ثابتة بموعد هتخليهم عادة.", Math.round(num(rt[iImpr]) || 0)]);
+        var totV = tot ? num(tot[iV]) : null, rV = num(rt[iV]);
+        if (totV && rV != null && rV / totV < 0.1) V.push(["ظبّط", "بس " + Math.round(rV / totV * 100) + "% من المشاهدات من ناس راجعة — اربط الفيديوهات ببعض (أجزاء، «الجزء الجاي») عشان الناس ترجع.", Math.round(totV)]);
+      }
+      var rowsHtml = body.map(function (r) { return [String(r[iL]).trim().indexOf("New") >= 0 ? "مشاهدين جدد" : "مشاهدين راجعين", (iV >= 0 ? fmtN(num(r[iV]) || 0) + " مشاهدة" : "") + (iCtr >= 0 && pctV(r[iCtr]) != null ? " — CTR " + fmtN(pctV(r[iCtr])) + "%" : "")]; });
+      var detail = "<p class='dim'>اتعرف على: تقسيم الجمهور جدد/راجعين (" + esc(fname) + ").</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("🔁 جدد × راجعين (" + esc(fname) + ")", detail);
+    }
+
+    // ---- شورتس × طويل / مكان المشاهدة ----
+    function analyzePlayback(h, rows, fname) {
+      var iL = 0, iV = colIdx(h, ["views", "المشاهدات"]), iW = colIdx(h, ["watch time (hours)", "مدة المشاهدة (ساعات)", "watch time"]), iDur = colIdx(h, ["average view duration", "متوسط مدة المشاهدة"]);
+      var sp = splitTotal(rows, iL), V = [];
+      var totV = sp.total ? num(sp.total[iV]) : sp.body.reduce(function (a, r) { return a + (num(r[iV]) || 0); }, 0);
+      if (!sp.body.length || !totV) return card("▶️ أنواع العرض (" + esc(fname) + ")", "<p>مفيش بيانات لسه.</p>");
+      var isType = String(h[0]).toLowerCase() === "content type";
+      if (isType) {
+        var sh = sp.body.filter(function (r) { return String(r[iL]).toLowerCase() === "shorts"; })[0];
+        var lg = sp.body.filter(function (r) { return String(r[iL]).toLowerCase() === "videos"; })[0];
+        if (sh && lg) {
+          var shV = num(sh[iV]) || 0, lgV = num(lg[iV]) || 0;
+          var shW = iW >= 0 ? num(sh[iW]) || 0 : 0, lgW = iW >= 0 ? num(lg[iW]) || 0 : 0;
+          if (lgW > shW && lgV < shV) V.push(["اعمل", "الفيديوهات الطويلة أقل مشاهدات (" + fmtN(lgV) + " مقابل " + fmtN(shV) + ") بس بتاكَل وقت مشاهدة أكتر (" + fmtN(lgW) + " ساعة مقابل " + fmtN(shW) + ") — وقت المشاهدة هو اللي بيقنع يوتيوب. خلي الشورتس طُعم يودّي للطويل.", Math.round(totV)]);
+        }
+      }
+      var rowsHtml = sp.body.map(function (r) { return [niceName(r[iL]), fmtN(num(r[iV]) || 0) + " مشاهدة" + (iDur >= 0 && r[iDur] ? " — وسط " + String(r[iDur]) : "")]; });
+      var detail = "<p class='dim'>اتعرف على: " + (isType ? "نوع المحتوى" : "مكان المشاهدة") + " (" + esc(fname) + ").</p>" + statRow(rowsHtml);
+      return verdictCard(V) + card("▶️ " + (isType ? "شورتس × طويل" : "مكان المشاهدة") + " (" + esc(fname) + ")", detail);
+    }
+
+    // ---- فيسبوك: المتابعات/إلغاء المتابعة/التفاعلات اليومية ----
+    function analyzeFbExtra(h, rows, fname) {
+      var iDate = colIdx(h, ["date_end_time_utc", "date"]), iFol = colIdx(h, ["page_follows"]), iNew = colIdx(h, ["page_daily_follows_unique"]);
+      var iUnf = colIdx(h, ["page_daily_unfollows_unique"]), iRe = colIdx(h, ["page_actions_post_reactions_total"]);
+      rows = rows.filter(function (r) { return r && String(r[iDate] || "").trim(); });
+      if (rows.length < 4) return card("📘 المتابعات اليومية", "<p>أيام قليلة أوي.</p>");
+      var V = [];
+      if (iFol >= 0) {
+        var first = num(rows[0][iFol]) || 0, last = num(rows[rows.length - 1][iFol]) || 0;
+        var net = last - first;
+        if (net <= 2) V.push(["ظبّط", "الصفحة واقفة: " + (net >= 0 ? "+" : "") + fmtN(net) + " متابعة في " + fmtN(rows.length) + " يوم — المحتوى بيتشاف بس مش بيقنع حد يتابع. قلّل المنشور العام وزوّد اللي فيه قيمة تستاهل المتابعة (سلسلة محددة بموعد).", rows.length]);
+        else V.push(["اعمل", "الصفحة بتكبر: +" + fmtN(net) + " متابعة في الفترة دي (وصلوا " + fmtN(last) + ").", rows.length]);
+      }
+      if (iUnf >= 0 && iNew >= 0) {
+        var unf = rows.reduce(function (a, r) { return a + (num(r[iUnf]) || 0); }, 0);
+        var nw = rows.reduce(function (a, r) { return a + (num(r[iNew]) || 0); }, 0);
+        if (unf > 0 && unf >= nw) V.push(["بطّل", "إلغاء المتابعة (" + fmtN(unf) + ") قد المتابعات الجديدة (" + fmtN(nw) + ") أو أكتر — في حاجة بتطرد الناس: راجع التكرار والمنشورات الترويجية.", rows.length]);
+      }
+      if (iRe >= 0) {
+        var rx = {};
+        rows.forEach(function (r) { try { var o = JSON.parse(String(r[iRe] || "{}")); Object.keys(o).forEach(function (k) { rx[k] = (rx[k] || 0) + (o[k] || 0); }); } catch (e) {} });
+        var keys = Object.keys(rx);
+        if (keys.length) V.push(["خد بالك", "التفاعلات في الفترة: " + keys.map(function (k) { return k + " " + fmtN(rx[k]); }).join("، ") + " — أرقام صغيرة؛ التفاعل لسه محتاج أسئلة في آخر المنشورات.", rows.length]);
+      }
+      var detail = "<p class='dim'>اتعرف على: متابعات/إلغاء/تفاعلات الصفحة اليومية (" + esc(fname) + ") — " + fmtN(rows.length) + " يوم.</p>";
+      return verdictCard(V) + card("📘 المتابعات والتفاعلات (" + esc(fname) + ")", detail);
     }
 
     // ---- فيسبوك Graph API: تصدير رؤى المنشورات (post_id + created_time_utc) ----
@@ -1872,6 +2063,13 @@
       var rows = parseCSV(t);
       if (rows.length < 2) return card("⚠️ مفيش بيانات — " + esc(name), "<p>الملف فاضي أو مش بصيغة جدول.</p>");
       var s = sniffCSV(rows);
+      if (s.kind === "traffic") return analyzeTraffic(s.h, s.rows, name);
+      if (s.kind === "geo") return analyzeGeo(s.h, s.rows, name);
+      if (s.kind === "device") return analyzeDevice(s.h, s.rows, name);
+      if (s.kind === "demo") return analyzeDemo(s.h, s.rows, name);
+      if (s.kind === "newret") return analyzeNewRet(s.h, s.rows, name);
+      if (s.kind === "playback") return analyzePlayback(s.h, s.rows, name);
+      if (s.kind === "fbextra") return analyzeFbExtra(s.h, s.rows, name);
       if (s.kind === "meta") return analyzeMeta(s.h, s.rows, name);
       if (s.kind === "fbgraph") return analyzeFbGraph(s.h, s.rows, name);
       if (s.kind === "fbdaily") return analyzeFbDaily(s.h, s.rows, name);
@@ -1902,7 +2100,7 @@
             var name = dec.decode(new Uint8Array(buf, off + 46, nlen));
             off += 46 + nlen + elen + clen;
             if (!/\.(csv|json|html?|txt)$/i.test(name) || csize > 12 * 1024 * 1024) continue;
-            if (out.length >= 12) continue;
+            if (out.length >= 40) continue;
             (function (nm, mth, cs, lo) {
               jobs.push(new Promise(function (res) {
                 try {
@@ -1966,6 +2164,12 @@
           var go = f.buffer ? Promise.resolve(f.buffer) : (f.file ? f.file.arrayBuffer() : Promise.reject(new Error("no buf")));
           go.then(function (ab) { return unzipTexts(ab); }).then(function (entries) {
             if (!entries.length) return finish(card("⚠️ ZIP من غير ملفات نصية — " + esc(f.name), "<p>فك الضغط مش متاح في المتصفح ده أو الملفات جواه مش CSV/JSON/HTML. فك الضغط على جهازك وارفع اللي جواه.</p>"));
+            var CHP = { mohandes: "mh_yt", trendradar: "tr_yt" };
+            var tagged = entries.filter(function (e) { var pfx = String(e.name).split("__")[0].split("_")[0].toLowerCase(); return CHP[pfx]; });
+            if (tagged.length && (prop === "mh_yt" || prop === "tr_yt")) {
+              var mine = tagged.filter(function (e) { var pfx = String(e.name).split("__")[0].split("_")[0].toLowerCase(); return CHP[pfx] === prop; });
+              if (mine.length) entries = mine;
+            }
             finish(entries.map(function (e) { return analyzeText(e.name + " (جوّه " + f.name + ")", e.text); }).join(""));
           }).catch(function (e) {
             finish(card("⚠️ مش قادرين نقرا الـ ZIP — " + esc(f.name), "<p>" + esc(e.message || e) + "</p>"));
