@@ -169,6 +169,8 @@
     });
   }
 
+  var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   // ---------- الخطوات ----------
   function showStep(n) {
     currentStep = n;
@@ -179,41 +181,133 @@
       b.classList.toggle("active", Number(b.dataset.step) === n);
     });
     document.body.dataset.step = String(n);
-    if (n === 3 && highs) solve();
+    if (!REDUCED) {
+      var sec = document.getElementById("step-" + n);
+      sec.classList.remove("enter");
+      void sec.offsetWidth;
+      sec.classList.add("enter");
+    }
+    if (n === 3 && highs) {
+      if (document.body.dataset.solved === "1") solveInstant(); else solveAnimated();
+    }
     if (n === 4) renderWhy();
     window.scrollTo(0, 0);
   }
 
   // ---------- الحل ----------
   function fmt(n) { return Number(n.toFixed ? n.toFixed(2) : n).toLocaleString("en-US"); }
-  function solve() {
+  function compute() {
     var items = readItems();
     var budget = Number(budgetEl.value) || 0;
     var hours = Number(hoursEl.value) || 0;
     var ex;
     try { ex = MakkookModel.explain(highs, items, budget, hours); }
-    catch (e) { statusEl.textContent = "في مشكلة في الأرقام: " + e.message; return; }
+    catch (e) { statusEl.textContent = "في مشكلة في الأرقام: " + e.message; return null; }
     lastExplain = { ex: ex, items: items, budget: budget, hours: hours };
-    var base = ex.base;
+    return { ex: ex, items: items, budget: budget, hours: hours };
+  }
+
+  // عدّاد رقمي بيعد من صفر للقيمة النهائية
+  function countUp(el, final, format, done) {
+    if (REDUCED) { el.textContent = format(final); if (done) done(); return; }
+    var t0 = null, DUR = 650;
+    function frame(t) {
+      if (t0 === null) t0 = t;
+      var p = Math.min(1, (t - t0) / DUR);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = format(final * eased);
+      if (p < 1) requestAnimationFrame(frame); else { el.textContent = format(final); if (done) done(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function renderResult(d, animate) {
+    var base = d.ex.base, items = d.items;
     var verdict = document.getElementById("verdict");
+    var chosenNames = base.chosen.map(function (i) { return items[i].name; });
     if (base.status !== "Optimal" || base.chosen.length === 0) {
       verdict.textContent = base.status !== "Optimal"
         ? "مفيش أي بند يدخل في القيود دي. جرّب تزوّد الميزانية أو الساعات."
         : "أحسن قرار: متعملش حاجة النهارده بالقيود دي.";
     } else {
-      verdict.textContent = "اختار: " + base.chosen.map(function (i) { return items[i].name; }).join(" + ");
+      verdict.textContent = "اختار: " + chosenNames.join(" + ");
     }
-    document.getElementById("tProfit").textContent = fmt(base.profit) + " جنيه";
-    document.getElementById("tCost").textContent = fmt(base.cost) + " من " + fmt(budget);
-    document.getElementById("tHours").textContent = fmt(base.hoursUsed) + " من " + fmt(hours) + " ساعة";
+    // شرائح البنود المختارة بتظهر واحدة ورا التانية
+    var chips = document.getElementById("planChips");
+    chips.innerHTML = "";
+    chosenNames.forEach(function (nm, i) {
+      var c = document.createElement("span");
+      c.className = "chip";
+      c.textContent = "✓ " + nm;
+      if (animate && !REDUCED) c.style.animationDelay = (0.15 + i * 0.12) + "s";
+      else c.style.animationDelay = "0s";
+      chips.appendChild(c);
+    });
+    // الأرقام بتعد لفوق
+    var fP = function (v) { return fmt(Math.round(v)) + " جنيه"; };
+    var fC = function (v) { return fmt(Math.round(v)) + " من " + fmt(d.budget); };
+    var fH = function (v) { return fmt(Math.round(v * 10) / 10) + " من " + fmt(d.hours) + " ساعة"; };
+    if (animate && !REDUCED) {
+      countUp(document.getElementById("tProfit"), base.profit, fP);
+      countUp(document.getElementById("tCost"), base.cost, fC);
+      countUp(document.getElementById("tHours"), base.hoursUsed, fH);
+    } else {
+      document.getElementById("tProfit").textContent = fP(base.profit);
+      document.getElementById("tCost").textContent = fC(base.cost);
+      document.getElementById("tHours").textContent = fH(base.hoursUsed);
+    }
+    // شريطا الفلوس والوقت (الانتقال بالـ CSS)
+    var barC = document.getElementById("barCost");
+    var barH = document.getElementById("barHours");
+    var pc = d.budget > 0 ? Math.min(100, (base.cost / d.budget) * 100) : 0;
+    var ph = d.hours > 0 ? Math.min(100, (base.hoursUsed / d.hours) * 100) : 0;
+    if (animate && !REDUCED) {
+      barC.style.width = "0%"; barH.style.width = "0%";
+      setTimeout(function () { barC.style.width = pc + "%"; barH.style.width = ph + "%"; }, 60);
+    } else {
+      barC.style.width = pc + "%"; barH.style.width = ph + "%";
+    }
     var skipped = items.filter(function (_, i) { return base.chosen.indexOf(i) === -1; }).map(function (it) { return it.name; });
     document.getElementById("skipList").textContent = skipped.length ? "اللي مش هيتعمل النهارده: " + skipped.join("، ") : "";
     statusEl.textContent = "";
     renderWhy();
+  }
+
+  function solveInstant() {
+    var d = compute();
+    if (!d) return;
+    renderResult(d, false);
     document.body.dataset.solved = "1";
   }
+
+  var STAGES = ["بيجمّع البنود…", "بيجرّب كل الاحتمالات الممكنة…", "بيقارن الأرباح…", "بيثبت إن ده الأحسن رياضيًا…"];
+  function solveAnimated() {
+    if (REDUCED) { solveInstant(); return; }
+    var d = compute();
+    if (!d) return;
+    solveBtn.disabled = true;
+    solveBtn.classList.add("thinking");
+    var orig = "احسب القرار الأمثل";
+    var i = 0;
+    solveBtn.textContent = STAGES[0];
+    var iv = setInterval(function () {
+      i++;
+      if (i < STAGES.length) { solveBtn.textContent = STAGES[i]; return; }
+      clearInterval(iv);
+      solveBtn.classList.remove("thinking");
+      solveBtn.textContent = orig;
+      solveBtn.disabled = false;
+      document.getElementById("verdict").classList.remove("pop");
+      void document.getElementById("verdict").offsetWidth;
+      document.getElementById("verdict").classList.add("pop");
+      renderResult(d, true);
+      // نعلّم solved بعد ما العدّادات تخلص عشان الأرقام تكون نهائية
+      setTimeout(function () { document.body.dataset.solved = "1"; }, 700);
+    }, 240);
+  }
+
   function maybeResolve() {
-    if (currentStep >= 3 && highs && document.body.dataset.solved === "1") solve();
+    if (currentStep >= 3 && highs && document.body.dataset.solved === "1") solveInstant();
   }
   function renderWhy() {
     var whyEl = document.getElementById("why");
@@ -326,7 +420,7 @@
   });
   budgetEl.addEventListener("input", function () { saveState(); maybeResolve(); });
   hoursEl.addEventListener("input", function () { saveState(); maybeResolve(); });
-  solveBtn.addEventListener("click", solve);
+  solveBtn.addEventListener("click", solveAnimated);
   document.getElementById("saveScn").addEventListener("click", saveCurrentScenario);
   document.querySelectorAll("[data-go]").forEach(function (b) {
     b.addEventListener("click", function () { showStep(Number(b.dataset.go)); });
