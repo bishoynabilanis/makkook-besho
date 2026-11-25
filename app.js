@@ -62,8 +62,52 @@
   var hoursEl = document.getElementById("hours");
 
   // ---------- البنود ----------
+  function enableDrag(tr, handle) {
+    handle.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      var startY = e.clientY;
+      var rows = Array.prototype.slice.call(rowsEl.children);
+      var from = rows.indexOf(tr);
+      var rowH = tr.offsetHeight + 8;
+      var to = from;
+      tr.classList.add("dragging");
+      sfxGrab();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      function onMove(ev) {
+        var dy = ev.clientY - startY;
+        tr.style.transform = "translateY(" + dy + "px)";
+        to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / rowH)));
+      }
+      function onUp() {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        tr.classList.remove("dragging");
+        tr.style.transform = "";
+        sfxDrop();
+        if (to !== from) {
+          var cur = Array.prototype.slice.call(rowsEl.children);
+          var ref = cur[to];
+          if (to > from) rowsEl.insertBefore(tr, ref.nextSibling);
+          else rowsEl.insertBefore(tr, ref);
+          saveState(); maybeResolve();
+        }
+      }
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+  }
+
   function addRow(item) {
     var tr = document.createElement("tr");
+    var hd = document.createElement("td");
+    hd.className = "drag";
+    hd.textContent = "⋮⋮";
+    hd.title = "اسحب البند من هنا";
+    hd.dataset.sfx = "1";
+    tr.appendChild(hd);
+    enableDrag(tr, hd);
     ["name", "category", "cost", "profit", "hours"].forEach(function (k) {
       var td = document.createElement("td");
       var inp = document.createElement("input");
@@ -73,14 +117,15 @@
         if (k === "category") inp.setAttribute("list", "cats");
       } else { inp.type = "number"; inp.min = "0"; }
       inp.value = item ? item[k] : (k === "name" || k === "category" ? "" : 0);
-      inp.addEventListener("input", function () { saveState(); maybeResolve(); });
+      inp.addEventListener("input", function () { sfxTick(); saveState(); maybeResolve(); });
       td.appendChild(inp);
       tr.appendChild(td);
     });
     var td = document.createElement("td");
     var del = document.createElement("button");
     del.type = "button"; del.className = "del"; del.textContent = "مسح"; del.title = "امسح البند ده";
-    del.addEventListener("click", function () { tr.remove(); saveState(); maybeResolve(); });
+    del.dataset.sfx = "1";
+    del.addEventListener("click", function () { sfxDel(); tr.remove(); saveState(); maybeResolve(); });
     td.appendChild(del);
     tr.appendChild(td);
     rowsEl.appendChild(tr);
@@ -193,8 +238,78 @@
 
   var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+
+  // ---------- الصوت: نغمات فضائية مولّدة (WebAudio، من غير ملفات) ----------
+  var SOUND_KEY = "makkook-besho-sound";
+  var soundOn = true;
+  try { soundOn = localStorage.getItem(SOUND_KEY) !== "off"; } catch (e) {}
+  var actx = null;
+  function ac() {
+    if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (AC) { try { actx = new AC(); } catch (e) {} } }
+    if (actx && actx.state === "suspended") { actx.resume(); }
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (!soundOn) return;
+    var a = ac(); if (!a) return;
+    try {
+      var t = a.currentTime + (delay || 0);
+      var o = a.createOscillator(), gn = a.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(f0, t);
+      if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      gn.gain.setValueAtTime(0, t);
+      gn.gain.linearRampToValueAtTime(vol || 0.03, t + 0.01);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(gn); gn.connect(a.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (e) {}
+  }
+  function sfxTap() { tone(880, 1320, 0.06, "square", 0.018); }
+  function sfxStep() { tone(220, 760, 0.2, "sine", 0.03); tone(1520, 1520, 0.08, "sine", 0.012, 0.16); }
+  function sfxAdd() { tone(523, 784, 0.12, "triangle", 0.032); tone(1046, 1046, 0.1, "sine", 0.02, 0.1); }
+  function sfxDel() { tone(440, 160, 0.18, "sawtooth", 0.02); }
+  function sfxGrab() { tone(300, 420, 0.05, "square", 0.016); }
+  function sfxDrop() { tone(540, 380, 0.07, "square", 0.02); }
+  function sfxReset() { tone(660, 660, 0.07, "triangle", 0.025); tone(440, 440, 0.09, "triangle", 0.025, 0.09); }
+  function sfxSave() { tone(784, 784, 0.08, "sine", 0.028); tone(1175, 1175, 0.14, "sine", 0.028, 0.08); }
+  function sfxBest() { tone(1568, 1568, 0.07, "sine", 0.016); }
+  var lastTick = 0;
+  function sfxTick() {
+    var now = Date.now();
+    if (now - lastTick < 70) return;
+    lastTick = now;
+    tone(1200, 1200, 0.03, "square", 0.008);
+  }
+  function sfxCalc() {
+    [392, 523, 659, 880, 1174].forEach(function (f, i) { tone(f, f * 1.01, 0.14, "triangle", 0.032, i * 0.09); });
+    tone(98, 196, 0.7, "sawtooth", 0.012, 0); // وشوشة هايبرسبيس
+  }
+  function sfxWin() {
+    [523, 659, 784].forEach(function (f, i) { tone(f, f, 0.4, "sine", 0.036, i * 0.06); });
+    tone(1568, 2093, 0.5, "sine", 0.02, 0.22);
+  }
+  document.addEventListener("click", function (e) {
+    if (!e.target || !e.target.closest) return;
+    var b = e.target.closest("button");
+    if (b && b.dataset.sfx !== "1") sfxTap();
+  });
+  var muteBtn = document.getElementById("muteBtn");
+  function paintMute() { if (muteBtn) muteBtn.textContent = soundOn ? "🔊" : "🔇"; }
+  if (muteBtn) {
+    muteBtn.dataset.sfx = "1";
+    muteBtn.addEventListener("click", function () {
+      soundOn = !soundOn;
+      if (soundOn) sfxTap();
+      try { localStorage.setItem(SOUND_KEY, soundOn ? "on" : "off"); } catch (e) {}
+      paintMute();
+    });
+    paintMute();
+  }
+
   // ---------- الخطوات ----------
   function showStep(n) {
+    if (n !== currentStep) sfxStep();
     currentStep = n;
     [1, 2, 3, 4].forEach(function (i) {
       document.getElementById("step-" + i).classList.toggle("hidden", i !== n);
@@ -458,6 +573,8 @@
     svBest.textContent = "0"; svProfit.textContent = "0"; svProg.style.width = "0%";
     svMsg.className = "sv-msg"; svMsg.textContent = "";
     viz.classList.remove("hidden");
+    document.body.dataset.warp = "1";
+    sfxCalc();
     var neon = neonStart(items);
     solveBtn.disabled = true;
     solveBtn.classList.add("thinking");
@@ -502,6 +619,7 @@
       if (!over) {
         if (prof > bestProfit) {
           bestProfit = prof;
+          sfxBest();
           svBest.textContent = fmt(prof);
           svBestBox.classList.remove("bump"); void svBestBox.offsetWidth; svBestBox.classList.add("bump");
           svMsg.className = "sv-msg good";
@@ -515,6 +633,8 @@
       setTimeout(stepFn, delay);
     }
     function finish() {
+      document.body.dataset.warp = "";
+      sfxWin();
       svMsg.className = "sv-msg good";
       svMsg.textContent = "✓ خلص البحث — وده القرار الأمثل المتأكد منه";
       var d = compute();
@@ -639,9 +759,15 @@
     saveState();
   }
   renderScenarios();
+  updateLiveBar();
 
-  document.getElementById("addRow").addEventListener("click", function () { addRow(null); saveState(); });
-  document.getElementById("resetBtn").addEventListener("click", function () {
+  var addRowBtn = document.getElementById("addRow");
+  addRowBtn.dataset.sfx = "1";
+  addRowBtn.addEventListener("click", function () { sfxAdd(); addRow(null); saveState(); });
+  var resetBtnEl = document.getElementById("resetBtn");
+  resetBtnEl.dataset.sfx = "1";
+  resetBtnEl.addEventListener("click", function () {
+    sfxReset();
     var t = TEMPLATES[currentTemplate];
     renderState({ template: currentTemplate, budget: t.budget, hours: t.hours, items: JSON.parse(JSON.stringify(t.items)) });
     saveState();
@@ -650,11 +776,15 @@
     document.body.dataset.solved = "";
     statusEl.textContent = "رجعنا للقالب الأصلي.";
   });
-  budgetEl.addEventListener("input", function () { saveState(); maybeResolve(); });
-  hoursEl.addEventListener("input", function () { saveState(); maybeResolve(); });
+  budgetEl.addEventListener("input", function () { sfxTick(); saveState(); maybeResolve(); });
+  hoursEl.addEventListener("input", function () { sfxTick(); saveState(); maybeResolve(); });
+  solveBtn.dataset.sfx = "1";
   solveBtn.addEventListener("click", solveLive);
-  document.getElementById("saveScn").addEventListener("click", saveCurrentScenario);
+  var saveScnBtn = document.getElementById("saveScn");
+  saveScnBtn.dataset.sfx = "1";
+  saveScnBtn.addEventListener("click", function () { sfxSave(); saveCurrentScenario(); });
   document.querySelectorAll("[data-go]").forEach(function (b) {
+    b.dataset.sfx = "1";
     b.addEventListener("click", function () { showStep(Number(b.dataset.go)); });
   });
   document.querySelectorAll("#stepper button").forEach(function (b) {
@@ -671,6 +801,7 @@
 
 
   // ---------- الحياة المحيطة: خلفية نيون هادئة في كل الشاشات ----------
+  // ---------- الفضاء المحيط: سديم ونجوم وكوكب بحلقات وأقمار — لكل خطوة قطاع بلونه ----------
   (function ambient() {
     var c = document.getElementById("bgCanvas");
     if (REDUCED || !c || !c.getContext) return;
@@ -684,32 +815,101 @@
     }
     size();
     window.addEventListener("resize", size);
-    var parts = [];
-    for (var i = 0; i < 12; i++) {
-      parts.push({ x: Math.random(), y: Math.random(), s: 0.006 + Math.random() * 0.012, r: 1 + Math.random() * 2.4, cyan: Math.random() < 0.6 });
-    }
+    var SECTORS = {
+      "1": { n1: [34, 216, 238],  n2: [168, 85, 247], sat: "rgba(103,232,249,.85)" },
+      "2": { n1: [255, 167, 38],  n2: [244, 81, 30],  sat: "rgba(255,204,128,.85)" },
+      "3": { n1: [236, 64, 122],  n2: [34, 216, 238], sat: "rgba(244,143,177,.85)" },
+      "4": { n1: [124, 224, 163], n2: [255, 213, 79], sat: "rgba(200,230,201,.85)" }
+    };
+    function sector() { return SECTORS[document.body.dataset.step] || SECTORS["1"]; }
+    function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
+    var i;
+    var stars = [];
+    for (i = 0; i < 70; i++) stars.push({ x: Math.random(), y: Math.random(), r: 0.4 + Math.random() * 1.1, tw: Math.random() * 6.28, ts: 0.001 + Math.random() * 0.003 });
+    var wstars = [];
+    for (i = 0; i < 60; i++) wstars.push({ a: Math.random() * 6.28, z: Math.random() });
+    var sats = [{ r: 2.1, sp: 0.0009, ph: 0, sz: 3 }, { r: 2.7, sp: -0.00055, ph: 2.2, sz: 2.2 }];
+    var arts = [{ x: 0.12, y: 0.75, s: 9, sp: 0.0004, ph: 1 }, { x: 0.88, y: 0.55, s: 7, sp: 0.0006, ph: 3 }];
     var t0 = 0;
     function frame(t) {
       requestAnimationFrame(frame);
       if (document.hidden) return;
       if (t - t0 < 40) return; // ~25fps للموبايلات الضعيفة
-      t0 = t;
+      var dt = t - t0; t0 = t;
+      var sec = sector();
       g.clearRect(0, 0, W, H);
-      // هالة كرة خافتة ورا الهيدر
-      var ox = W / 2, oy = 70;
-      var r = 30 + 7 * Math.sin(t / 800);
-      var grad = g.createRadialGradient(ox, oy, 1, ox, oy, r + 50);
-      grad.addColorStop(0, "rgba(34,216,238,.09)");
-      grad.addColorStop(1, "rgba(168,85,247,0)");
-      g.beginPath(); g.arc(ox, oy, r + 50, 0, 6.283); g.fillStyle = grad; g.fill();
-      // جسيمات نيون طالعة ببطء
-      parts.forEach(function (p) {
-        p.y -= p.s;
-        if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
-        g.beginPath();
-        g.arc(p.x * W, p.y * H, p.r, 0, 6.283);
-        g.fillStyle = p.cyan ? "rgba(34,216,238,.22)" : "rgba(168,85,247,.18)";
+
+      // سديم عميق بألوان القطاع
+      var nx = W * (0.5 + 0.25 * Math.sin(t / 9000)), ny = H * (0.3 + 0.15 * Math.cos(t / 11000));
+      var m = Math.max(W, H);
+      var ng = g.createRadialGradient(nx, ny, 10, nx, ny, m * 0.7);
+      ng.addColorStop(0, rgba(sec.n1, 0.07)); ng.addColorStop(0.5, rgba(sec.n2, 0.04)); ng.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = ng; g.fillRect(0, 0, W, H);
+      var n2g = g.createRadialGradient(W - nx, H - ny, 10, W - nx, H - ny, m * 0.55);
+      n2g.addColorStop(0, rgba(sec.n2, 0.05)); n2g.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = n2g; g.fillRect(0, 0, W, H);
+
+      if (document.body.dataset.warp === "1") {
+        // هايبرسبيس وقت الحساب: خطوط نجمية متسارعة من المركز
+        var cx = W / 2, cy = H * 0.4;
+        wstars.forEach(function (s) {
+          s.z += dt * 0.0016;
+          if (s.z > 1) { s.z = 0.05; s.a = Math.random() * 6.28; }
+          var d1 = s.z * s.z * m;
+          var d0 = Math.max(1, d1 - s.z * 90);
+          g.beginPath();
+          g.moveTo(cx + Math.cos(s.a) * d0, cy + Math.sin(s.a) * d0);
+          g.lineTo(cx + Math.cos(s.a) * d1, cy + Math.sin(s.a) * d1);
+          g.strokeStyle = rgba(sec.n1, 0.35 * s.z + 0.1);
+          g.lineWidth = s.z * 2 + 0.4;
+          g.stroke();
+        });
+        var wg = g.createRadialGradient(cx, cy, 1, cx, cy, 120);
+        wg.addColorStop(0, "rgba(255,255,255,.14)"); wg.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = wg; g.beginPath(); g.arc(cx, cy, 120, 0, 6.283); g.fill();
+        return;
+      }
+
+      // نجوم بتومض
+      stars.forEach(function (s) {
+        s.tw += dt * s.ts;
+        g.beginPath(); g.arc(s.x * W, s.y * H, s.r, 0, 6.283);
+        g.fillStyle = "rgba(255,255,255," + (0.22 + 0.3 * Math.abs(Math.sin(s.tw))) + ")";
         g.fill();
+      });
+
+      // الكوكب النيون: أكبر وأوضح مع هالة وحلقات
+      var ox = W / 2, oy = H * 0.2;
+      var R = 46 + 6 * Math.sin(t / 750);
+      var halo = g.createRadialGradient(ox, oy, R * 0.3, ox, oy, R * 2.6);
+      halo.addColorStop(0, rgba(sec.n1, 0.16)); halo.addColorStop(0.6, rgba(sec.n2, 0.06)); halo.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = halo; g.beginPath(); g.arc(ox, oy, R * 2.6, 0, 6.283); g.fill();
+      var pb = g.createRadialGradient(ox - R * 0.35, oy - R * 0.35, R * 0.1, ox, oy, R);
+      pb.addColorStop(0, rgba(sec.n1, 0.35)); pb.addColorStop(1, rgba(sec.n2, 0.10));
+      g.fillStyle = pb; g.beginPath(); g.arc(ox, oy, R, 0, 6.283); g.fill();
+      [1.45, 1.8].forEach(function (rm, ri) {
+        g.save(); g.translate(ox, oy); g.rotate(Math.sin(t / 4000 + ri) * 0.35 + 0.3); g.scale(1, 0.32);
+        g.beginPath(); g.arc(0, 0, R * rm, 0, 6.283);
+        g.strokeStyle = rgba(sec.n2, 0.22 - ri * 0.06); g.lineWidth = 1.4; g.stroke();
+        g.restore();
+      });
+      // أقمار صناعية بتدور
+      sats.forEach(function (s2) {
+        s2.ph += dt * s2.sp;
+        var sx = ox + Math.cos(s2.ph) * R * s2.r, sy = oy + Math.sin(s2.ph) * R * s2.r * 0.42;
+        g.beginPath(); g.arc(sx, sy, s2.sz * 3, 0, 6.283); g.fillStyle = rgba(sec.n1, 0.12); g.fill();
+        g.beginPath(); g.arc(sx, sy, s2.sz, 0, 6.283); g.fillStyle = sec.sat; g.fill();
+      });
+      // قطع أثرية متوهجة بتطفو وتلف
+      arts.forEach(function (a) {
+        var ay = a.y + 0.04 * Math.sin(t * a.sp * 3 + a.ph);
+        var ax = a.x + 0.03 * Math.cos(t * a.sp * 2);
+        g.save(); g.translate(ax * W, ay * H); g.rotate(t * a.sp);
+        g.beginPath();
+        g.moveTo(0, -a.s); g.lineTo(a.s, 0); g.lineTo(0, a.s); g.lineTo(-a.s, 0); g.closePath();
+        g.strokeStyle = rgba(sec.n2, 0.3); g.lineWidth = 1.2; g.stroke();
+        g.fillStyle = rgba(sec.n1, 0.07); g.fill();
+        g.restore();
       });
     }
     requestAnimationFrame(frame);
