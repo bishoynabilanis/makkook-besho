@@ -1,5 +1,5 @@
 /* مكوك بيشو — الشبكة أولًا عشان نفس الرابط يجيب أحدث نسخة دايمًا، والكاش fallback أوفلاين */
-var CACHE = "makkook-besho-v14";
+var CACHE = "makkook-besho-v15";
 var FILES = ["./", "index.html", "app.js", "model.js", "highs-engine.js", "19-wasm-data.js", "manifest.json", "version.json", "icon-192.png", "icon-512.png"];
 /* الملفات الكبيرة الثابتة: كاش أولًا (مش بتتغير، وحجمها ٧ ميجا — منعيدش تحميلها كل مرة) */
 function cacheFirst(url) {
