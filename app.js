@@ -79,7 +79,7 @@
     });
     var td = document.createElement("td");
     var del = document.createElement("button");
-    del.type = "button"; del.className = "del"; del.textContent = "×"; del.title = "امسح البند ده";
+    del.type = "button"; del.className = "del"; del.textContent = "مسح"; del.title = "امسح البند ده";
     del.addEventListener("click", function () { tr.remove(); saveState(); maybeResolve(); });
     td.appendChild(del);
     tr.appendChild(td);
