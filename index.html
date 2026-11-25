@@ -109,9 +109,15 @@
   @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
   .tot b { display: block; }
   @media (prefers-reduced-motion: reduce) {
+    #svCanvas { display: none !important; }
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .chip { opacity: 1 !important; }
   }
+
+
+  /* ---------- كرة النيون وخيوط التركيبات ---------- */
+  .sv-canvas-wrap { margin: 2px 0 8px; }
+  #svCanvas { width: 100%; height: 190px; display: block; }
 
   /* ---------- تصوير البحث الحي ---------- */
   .sv { border: 1px dashed #3a3a44; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: #101016; }
@@ -208,6 +214,7 @@
     <p class="hint">مش توصية ولا تخمين — ده أفضل قرار ممكن رياضيًا جوه قيودك، والبرنامج بيثبت ده.</p>
     <div class="sv hidden" id="searchViz">
       <div class="sv-head"><span id="svTitle">بيجرّب كل التركيبات…</span><span id="svCount"></span></div>
+      <div class="sv-canvas-wrap"><canvas id="svCanvas"></canvas></div>
       <div class="chips sv-chips" id="svChips"></div>
       <div class="sv-stats">
         <div class="sv-stat">ربح التركيبة الحالية<b id="svProfit">0</b></div>
