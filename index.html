@@ -137,6 +137,16 @@
   .sv-msg.bad { color: #e57373; }
   .bar i.over { background: linear-gradient(90deg, #c62828, #ef5350); }
 
+
+  /* ---------- التعديل واضح وباين ---------- */
+  .tbl input, #budget, #hours { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9aa5' stroke-width='2.4'><path d='M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z'/></svg>"); background-repeat: no-repeat; background-position: left 7px center; padding-left: 25px; }
+  .edit-hint { background: #241708; border: 1px solid #8a5a1e; border-radius: 8px; padding: 8px 10px; color: #f0c98a; font-size: 13.5px; }
+  th .pen { color: var(--orange); }
+  .del { width: auto; min-width: 40px; padding: 0 10px; font-size: 13px; height: 32px; }
+  .add { border: 1px dashed var(--orange); color: var(--orange); }
+  .editrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+  .editbtn { background: #1b1b22; border: 1px solid var(--orange); color: var(--orange); padding: 8px 14px; font-size: 13.5px; border-radius: 8px; }
+
   footer { font-size: 12.5px; color: #6a6a75; text-align: center; margin-top: 18px; }
   @media (max-width: 520px) {
     header h1 { font-size: 20px; }
@@ -165,12 +175,13 @@
   <!-- خطوة ١: البنود -->
   <div class="card step" id="step-1">
     <h2><span>٠١</span> عرّف البنود</h2>
-    <p class="hint">اختار قالب جاهز أو ابني بنودك بنفسك. كل خانة قابلة للتعديل، وتقدر تضيف وتمسح زي ما تحب.</p>
+    <p class="hint">اختار قالب جاهز أو ابني بنودك بنفسك.</p>
+    <p class="edit-hint">✎ <b>التعديل هنا:</b> دوس على أي خانة في الجدول — الاسم، القسم، السعر، الربح، الساعات — وغيّرها على طول. زرار «مسح» بيمسح البند، و«+ ضيف بند» بيضيف جديد.</p>
     <div class="templates" id="templates"></div>
     <div class="tbl">
       <table>
         <thead>
-          <tr><th id="thName">الجهاز / القطعة</th><th>القسم / النوع</th><th id="thCost">تكلفة القطعة</th><th id="thProfit">ربح التصليح</th><th id="thHours">ساعات الشغل</th><th></th></tr>
+          <tr><th id="thName">الجهاز / القطعة <span class="pen">✎</span></th><th>القسم / النوع <span class="pen">✎</span></th><th id="thCost">تكلفة القطعة <span class="pen">✎</span></th><th id="thProfit">ربح التصليح <span class="pen">✎</span></th><th id="thHours">ساعات الشغل <span class="pen">✎</span></th><th></th></tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
@@ -190,7 +201,7 @@
   <!-- خطوة ٢: القيود -->
   <div class="card step hidden" id="step-2">
     <h2><span>٠٢</span> حدد قيودك</h2>
-    <p class="hint">دي الحدود اللي القرار ملتزم بيها مهما حصل. غيّرها في أي وقت والخطة بتتحسب تاني فورًا.</p>
+    <p class="edit-hint">✎ <b>التعديل هنا:</b> دوس على رقم الميزانية أو الساعات وغيّره — والخطة بتتحسب تاني فورًا.</p>
     <div class="row">
       <div class="field">
         <label for="budget" id="budgetLabel">ميزانية قطع الغيار (جنيه)</label>
@@ -240,6 +251,10 @@
       <div class="skip" id="skipList"></div>
       <div class="skip">نفس الأرقام بتطلع نفس الخطة كل مرة، والحل مضمون إنه الأحسن جوه القيود دي.</div>
     </div>
+    <div class="editrow">عايز تغيّر حاجة؟
+      <button class="editbtn" type="button" data-go="1">✎ البنود والأسعار</button>
+      <button class="editbtn" type="button" data-go="2">✎ الميزانية والساعات</button>
+    </div>
     <div class="navrow">
       <button class="back" type="button" data-go="2">→ السابق</button>
       <span class="spacer"></span>
@@ -260,6 +275,10 @@
     </div>
     <div id="scnList"></div>
     <div id="scnCmp"></div>
+    <div class="editrow">عايز تغيّر حاجة؟
+      <button class="editbtn" type="button" data-go="1">✎ البنود والأسعار</button>
+      <button class="editbtn" type="button" data-go="2">✎ الميزانية والساعات</button>
+    </div>
     <div class="navrow" style="margin-top:12px;">
       <button class="back" type="button" data-go="3">→ السابق</button>
     </div>
