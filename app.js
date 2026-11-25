@@ -263,7 +263,7 @@
 
 
   // ---------- النسخة والتحديث التلقائي على نفس الرابط ----------
-  var APP_VERSION = "13";
+  var APP_VERSION = "14";
   var verTag = document.getElementById("verTag");
   if (verTag) verTag.textContent = "النسخة " + APP_VERSION;
   var updatePending = false;
@@ -383,7 +383,7 @@
   function showStep(n) {
     if (n !== currentStep) sfxStep();
     currentStep = n;
-    [1, 2, 3, 4].forEach(function (i) {
+    [1, 2, 3, 4, 5].forEach(function (i) {
       document.getElementById("step-" + i).classList.toggle("hidden", i !== n);
     });
     document.querySelectorAll("#stepper button").forEach(function (b) {
@@ -969,7 +969,7 @@
     var dbgEl = document.getElementById("dbg");
     var dbgFrames = 0;
     function dbg(extra) {
-      if (dbgEl) dbgEl.textContent = "v13 cv " + c.width + "x" + c.height + " dpr" + dpr + " " + extra;
+      if (dbgEl) dbgEl.textContent = "v" + APP_VERSION + " cv " + c.width + "x" + c.height + " dpr" + dpr + " " + extra;
     }
     function size() {
       W = window.innerWidth; H = window.innerHeight;
@@ -1154,4 +1154,849 @@
   }).catch(function (e) {
     statusEl.textContent = "محرك الحساب ما اتحمّلش: " + e;
   });
+
+  // ---------- قناتك: تحليل أداء فيسبوك ويوتيوب من ملفات التصدير نفسها ----------
+  (function () {
+    var fileEl = document.getElementById("chFile");
+    if (!fileEl) return;
+    var pasteEl = document.getElementById("chPaste");
+    var outEl = document.getElementById("chOut");
+    var stEl = document.getElementById("chStatus");
+    var PROPS = {
+      tr_yt: "تريند رادار — يوتيوب",
+      mh_yt: "المهندس — يوتيوب",
+      mh_fb: "المهندس — فيسبوك"
+    };
+    var PROP_KEY = "mk_channel_prop";
+    var prop = "tr_yt";
+    try { prop = localStorage.getItem(PROP_KEY) || "tr_yt"; } catch (e) {}
+    if (!PROPS[prop]) prop = "tr_yt";
+    var DAYS = ["الحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
+    var STOP = ("في,من,على,إلى,عن,أن,إن,كان,ما,لا,لم,لن,يا,هو,هي,ده,دي,the,a,an,and,or,to,of,in,on,for,with,how,why,is,are,at,it,this,that,vs,its,his,her,says,after,new,first,back,what,happened,show,shows,means,mattered,week,stories,اللي,بعد,قبل,أول,اخر,آخر,كل,لو,مش,أو,و").split(",");
+    var STOPMAP = {}; STOP.forEach(function (w) { STOPMAP[w] = 1; });
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function fmtN(x) {
+      if (x == null || isNaN(x)) return "—";
+      var r = Math.round(x * 10) / 10;
+      var s = String(Math.abs(r) % 1 ? r : Math.round(r));
+      var neg = r < 0 ? "-" : "";
+      return neg + s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    function num(s) {
+      if (s == null) return null;
+      s = String(s).replace(/[,\s٬]/g, "").replace(/[٫]/g, ".").trim();
+      if (s === "" || s === "--" || s === "-") return null;
+      var m = s.match(/-?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : null;
+    }
+    function pctV(s) {
+      if (s == null) return null;
+      return num(String(s).replace("%", ""));
+    }
+    function hms(s) {
+      s = String(s == null ? "" : s).trim();
+      var m = s.match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      return (+m[1] || 0) * 3600 + (+m[2]) * 60 + (+m[3]);
+    }
+    function parseDateSmart(s) {
+      s = String(s == null ? "" : s).trim();
+      if (!s) return null;
+      var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+      if (m) return new Date(+m[3], +m[1] - 1, +m[2], +(m[4] || 0), +(m[5] || 0)); // شهر أولًا (تصدير ميتا)
+      var t = Date.parse(s.replace(/\s+/g, " "));
+      return isNaN(t) ? null : new Date(t);
+    }
+    function pickDelim(line) {
+      var c = (line.match(/,/g) || []).length, s = (line.match(/;/g) || []).length, t = (line.match(/\t/g) || []).length;
+      return t > c && t > s ? "\t" : (s > c ? ";" : ",");
+    }
+    function parseCSV(text) {
+      text = String(text).replace(/^﻿/, "");
+      var dl = pickDelim(text.split(/\r?\n/, 1)[0] || "");
+      var rows = [], row = [], cell = "", inQ = false, i, c;
+      for (i = 0; i < text.length; i++) {
+        c = text[i];
+        if (inQ) {
+          if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+          else cell += c;
+        } else if (c === '"') inQ = true;
+        else if (c === dl) { row.push(cell); cell = ""; }
+        else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(cell); cell = "";
+          if (row.length > 1 || row[0] !== "") rows.push(row);
+          row = [];
+        } else cell += c;
+      }
+      if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+      return rows;
+    }
+    function colIdx(headers, names) {
+      var low = headers.map(function (h) { return String(h || "").trim().toLowerCase(); });
+      var i, n, want;
+      for (n = 0; n < names.length; n++) {
+        want = names[n].toLowerCase();
+        for (i = 0; i < low.length; i++) if (low[i] === want) return i;
+      }
+      for (n = 0; n < names.length; n++) {
+        want = names[n].toLowerCase();
+        for (i = 0; i < low.length; i++) if (low[i].indexOf(want) !== -1) return i;
+      }
+      return -1;
+    }
+    function stat(nums) {
+      nums = nums.filter(function (v) { return v != null && !isNaN(v); }).sort(function (a, b) { return a - b; });
+      if (!nums.length) return null;
+      var sum = 0; nums.forEach(function (v) { sum += v; });
+      return { n: nums.length, avg: sum / nums.length, med: nums[Math.floor(nums.length / 2)], max: nums[nums.length - 1], min: nums[0], sum: sum };
+    }
+    function card(title, bodyHtml) { return '<div class="ch-card"><h3>' + title + '</h3>' + bodyHtml + '</div>'; }
+    function statRow(items) {
+      return '<div class="ch-stat">' + items.map(function (it) { return "<div>" + esc(it[0]) + "<b>" + esc(it[1]) + "</b></div>"; }).join("") + "</div>";
+    }
+    var VICON = { "اعمل": "✅", "بطّل": "🛑", "ظبّط": "🛠️", "خد بالك": "👀" };
+    function verdictCard(verdicts) {
+      if (!verdicts.length) return "";
+      return card("🎯 الخلاصة — القرار لـ " + esc(PROPS[prop]),
+        "<ul>" + verdicts.map(function (v) {
+          var conf = "";
+          if (typeof v[2] === "number") {
+            if (v[2] >= 8) conf = " <span class='dim'>— الثقة: كافية (مبني على " + fmtN(v[2]) + ")</span>";
+            else if (v[2] >= 4) conf = " <span class='dim'>— الثقة: وسط (" + fmtN(v[2]) + " بس؛ اعتبره اتجاه وجرّبه)</span>";
+            else conf = " <span class='dim'>— ⚠️ عينة صغيرة أوي (" + fmtN(v[2]) + " بس): ده استرشادي مش حكم؛ اللي يحسمه إنك تنشر أكتر بنفس النمط وتقارن تاني.</span>";
+          }
+          return "<li><b>" + (VICON[v[0]] || "▫️") + " " + v[0] + ":</b> " + v[1] + conf + "</li>";
+        }).join("") + "</ul>");
+    }
+    function keywords(titles) {
+      var map = {};
+      titles.forEach(function (t) {
+        String(t || "").toLowerCase().replace(/#\S+/g, " ").replace(/[.,!?:;()\[\]"'«»،|&]/g, " ").split(/\s+/).forEach(function (w) {
+          if (w.length > 2 && !STOPMAP[w]) map[w] = (map[w] || 0) + 1;
+        });
+      });
+      return Object.keys(map).map(function (k) { return [k, map[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+    }
+
+    // ---- كشف نوع الجدول ----
+    function sniffCSV(rows) {
+      var h = rows[0].map(function (x) { return String(x || "").trim(); });
+      var low0 = (h[0] || "").toLowerCase();
+      if ((low0 === "date" || h[0] === "التاريخ") && h.length >= 2) {
+        if ((h[1] || "").toLowerCase() === "content" || h[1] === "المحتوى") return { kind: "chart", h: h, rows: rows.slice(1) };
+        return { kind: "totals", h: h, rows: rows.slice(1) };
+      }
+      if (colIdx(h, ["post_id"]) >= 0 && colIdx(h, ["created_time_utc", "status_type"]) >= 0)
+        return { kind: "fbgraph", h: h, rows: rows.slice(1) };
+      if (colIdx(h, ["date_end_time_utc"]) >= 0 && colIdx(h, ["page_media_view", "page_post_engagements"]) >= 0)
+        return { kind: "fbdaily", h: h, rows: rows.slice(1) };
+      if (colIdx(h, ["publish time", "وقت النشر"]) >= 0 && (colIdx(h, ["post type", "نوع المنشور"]) >= 0 || colIdx(h, ["description", "الوصف"]) >= 0))
+        return { kind: "meta", h: h, rows: rows.slice(1) };
+      if (colIdx(h, ["video title", "عنوان الفيديو"]) >= 0 || colIdx(h, ["content", "المحتوى", "video", "الفيديو"]) >= 0 && colIdx(h, ["views", "المشاهدات"]) >= 0)
+        return { kind: "studio", h: h, rows: rows.slice(1) };
+      return { kind: "generic", h: h, rows: rows.slice(1) };
+    }
+
+    // ---- استوديو يوتيوب: جدول الفيديوهات ----
+    function analyzeStudio(h, rows, fname) {
+      var iTitle = colIdx(h, ["video title", "عنوان الفيديو", "title"]);
+      var iViews = colIdx(h, ["views", "المشاهدات"]);
+      var iPct = colIdx(h, ["average percentage viewed", "متوسط النسبة المئوية للمشاهدة"]);
+      var iDurSec = colIdx(h, ["duration", "المدة"]);
+      var iDur = colIdx(h, ["average view duration", "متوسط مدة المشاهدة"]);
+      var iImpr = colIdx(h, ["thumbnail impressions", "impressions", "مرات الظهور"]);
+      var iCtr = colIdx(h, ["click-through rate", "نسبة النقر"]);
+      var iSubs = colIdx(h, ["subscribers", "المشتركون"]);
+      var iWatch = colIdx(h, ["watch time (hours)", "مدة المشاهدة (ساعات)", "watch time"]);
+      var iPub = colIdx(h, ["video publish time", "تاريخ نشر الفيديو", "publish time", "وقت النشر"]);
+      var iLike = colIdx(h, ["likes", "الإعجابات"]);
+      var iCom = colIdx(h, ["comments", "التعليقات"]);
+      var iShare = colIdx(h, ["shares", "عمليات المشاركة"]);
+      var iEngaged = colIdx(h, ["engaged views", "المشاهدات المتفاعلة"]);
+      var iStayed = colIdx(h, ["stayed to watch", "استمروا في المشاهدة", "استمرّوا في المشاهدة"]);
+      var iUnique = colIdx(h, ["unique viewers", "مشاهدون فرديون", "المشاهدون الفرديون"]);
+      var iNewV = colIdx(h, ["new viewers", "مشاهدون جدد", "المشاهدون الجدد"]);
+      var iRetV = colIdx(h, ["returning viewers", "مشاهدون عائدون", "المشاهدون العائدون"]);
+      // صف الإجمالي (Total) بيكون أول صف من غير عنوان
+      var totalRow = null;
+      rows = rows.filter(function (r) {
+        var c0 = String(r[0] || "").trim().toLowerCase();
+        if (c0 === "total" || c0 === "الإجمالي") { totalRow = r; return false; }
+        return r.length > 1 && (iTitle < 0 || String(r[iTitle] || "").trim());
+      });
+      var V = []; // verdicts
+      var out = [];
+      var views = rows.map(function (r) { return iViews >= 0 ? num(r[iViews]) : null; });
+      var vs = stat(views);
+      var found = [];
+      if (iViews >= 0) found.push("المشاهدات");
+      if (iEngaged >= 0) found.push("المشاهدات المتفاعلة");
+      if (iStayed >= 0) found.push("فضلوا واقفين يتفرجوا");
+      if (iNewV >= 0) found.push("مشاهدين جدد/عائدين");
+      if (iUnique >= 0) found.push("مشاهدين فريدين");
+      if (iWatch >= 0) found.push("مدة المشاهدة");
+      if (iDurSec >= 0) found.push("مدة الفيديو");
+      if (iImpr >= 0) found.push("مرات ظهور المصغرة");
+      if (iCtr >= 0) found.push("نسبة النقر");
+      if (iSubs >= 0) found.push("المشتركين");
+      if (iPub >= 0) found.push("تاريخ النشر");
+      if (iLike >= 0) found.push("الإعجابات");
+      if (iCom >= 0) found.push("التعليقات");
+      if (iShare >= 0) found.push("المشاركات");
+      var missing = [];
+      if (iPub < 0) missing.push("Video publish time");
+      if (iImpr < 0) missing.push("Thumbnail impressions");
+      if (iCtr < 0) missing.push("Thumbnail click-through rate");
+      if (iLike < 0) missing.push("Likes");
+      if (iCom < 0) missing.push("Comments");
+
+      // الاحتفاظ: من العمود أو محسوب من مدة المشاهدة / المدة
+      var ret = rows.map(function (r, k) {
+        if (iPct >= 0) { var p = pctV(r[iPct]); if (p != null) return p; }
+        if (iWatch >= 0 && iDurSec >= 0 && views[k]) {
+          var wh = num(r[iWatch]), dur = num(r[iDurSec]);
+          if (wh != null && dur && dur > 0) return wh * 3600 / views[k] / dur * 100;
+        }
+        return null;
+      });
+      var rs = stat(ret);
+
+      if (vs) {
+        var idx = views.map(function (v, k) { return [v == null ? -1 : v, k]; }).sort(function (a, b) { return b[0] - a[0]; });
+        var top = idx[0], bot = idx[idx.length - 1];
+        var topT = iTitle >= 0 ? String(rows[top[1]][iTitle]) : "—";
+        var botT = iTitle >= 0 ? String(rows[bot[1]][iTitle]) : "—";
+        // قرار: اعمل أكتر من نوع الفائز / بطّل الخاسر
+        if (idx.length >= 3) {
+          var win = idx.filter(function (p) { return p[0] >= vs.med * 2 && p[0] > 0; });
+          var losers = idx.filter(function (p) { return p[0] <= vs.med * 0.35; });
+          if (win.length && iTitle >= 0) {
+            var wk = keywords(win.map(function (p) { return rows[p[1]][iTitle]; })).slice(0, 3).map(function (p) { return p[0]; });
+            V.push(["اعمل", "أكتر من مواضيع زي «" + esc(topT.slice(0, 45)) + "» — جابت " + fmtN(top[0]) + " مشاهدة (" + fmtN(top[0] / (vs.med || 1)) + "× الوسط)" + (wk.length ? ". الكلمات الرابحة: " + esc(wk.join("، ")) : "") + ".", rows.length]);
+          }
+          if (losers.length >= Math.max(2, Math.ceil(idx.length / 3)) && iTitle >= 0) {
+            var lk = keywords(losers.map(function (p) { return rows[p[1]][iTitle]; })).slice(0, 3).map(function (p) { return p[0]; });
+            V.push(["بطّل", "الشكل اللي بيجيب " + fmtN(bot[0]) + " مشاهدة زي «" + esc(botT.slice(0, 45)) + "» — أقل من تلت الوسط (" + fmtN(vs.med) + ")" + (lk.length ? ". الكلمات الخاسرة: " + esc(lk.join("، ")) : "") + ".", rows.length]);
+          }
+        }
+      }
+      if (rs) {
+        var isMostlyShort = iDurSec >= 0 && stat(rows.map(function (r) { return num(r[iDurSec]); })) && stat(rows.map(function (r) { return num(r[iDurSec]); })).med <= 60;
+        var th = isMostlyShort ? 70 : 40;
+        if (rs.med < th) {
+          V.push(["ظبّط", "أول ثانيتين — الوسط بيشوف " + fmtN(rs.med) + "% بس من " + (isMostlyShort ? "الشورت" : "الفيديو") + " (المقبول " + th + "%+). ابدأ بالخبر نفسه فورًا، بلاش مقدمة.", ret.length]);
+        } else {
+          V.push(["اعمل", "الاحتفاظ كويس (" + fmtN(rs.med) + "% وسط) — كمّل على نفس طريقة البداية.", ret.length]);
+        }
+        // أسوأ فيديو احتفاظ
+        var rIdx = ret.map(function (v, k) { return [v == null ? 1e9 : v, k]; }).sort(function (a, b) { return a[0] - b[0]; });
+        if (rIdx.length && rIdx[0][0] !== 1e9 && iTitle >= 0 && rIdx[0][0] < th * 0.6) {
+          V.push(["بطّل", "أسلوب «" + esc(String(rows[rIdx[0][1]][iTitle]).slice(0, 45)) + "» — أسوأ احتفاظ (" + fmtN(rIdx[0][0]) + "%). الناس بتقفل فورًا.", ret.length]);
+        }
+      }
+      if (iStayed >= 0) {
+        var stw = stat(rows.map(function (r) { return pctV(r[iStayed]); }));
+        if (stw) {
+          if (stw.med < 25) V.push(["ظبّط", "بس " + fmtN(stw.med) + "% بيقفوا يتفرجوا من أول لحظة (Stayed to watch) — الخُطّاف أضعف حاجة عندك: أول جملة = النتيجة أو الخبر، من غير سلامات.", stw.n]);
+          else if (stw.med >= 40) V.push(["اعمل", fmtN(stw.med) + "% بيفضلوا واقفين يتفرجوا (Stayed to watch) — بدايتك مسكة، حافظ عليها.", stw.n]);
+        }
+      }
+      if (iNewV >= 0 && iRetV >= 0) {
+        var newS = 0, retS = 0;
+        rows.forEach(function (r) { newS += num(r[iNewV]) || 0; retS += num(r[iRetV]) || 0; });
+        if (newS + retS >= 20) {
+          if (retS < newS * 0.15) V.push(["ظبّط", "جمهورك كله تقريبًا جديد (" + fmtN(newS) + " جديد مقابل " + fmtN(retS) + " راجع) — مفيش حد بيرجع. اعمل سلاسل مترابطة (جزء ١ وجزء ٢) وثبّت موعد النشر.", rows.length]);
+          else if (retS > newS * 0.3) V.push(["اعمل", "عندك جمهور بيرجع (" + fmtN(retS) + " راجع) — ده أصل غالي: اعملهم سلسلة ثابتة بموعد.", rows.length]);
+        }
+      }
+      if (iEngaged >= 0 && vs) {
+        var er = stat(rows.map(function (r, k) { var e = num(r[iEngaged]); return e != null && views[k] ? e / views[k] * 100 : null; }));
+        if (er && er.med < 60) V.push(["خد بالك", "المشاهدات المتفاعلة " + fmtN(er.med) + "% بس من كل مشاهدة — جزء كبير بيعدّي من غير مشاهدة حقيقية.", er.n]);
+      }
+      if (iImpr >= 0 && iCtr >= 0) {
+        var imp = rows.map(function (r) { return num(r[iImpr]); });
+        var ctr = rows.map(function (r) { return pctV(r[iCtr]); });
+        var wsum = 0, isum = 0;
+        ctr.forEach(function (c, k) { if (c != null && imp[k]) { wsum += c * imp[k]; isum += imp[k]; } });
+        var is = stat(imp);
+        if (isum > 0) {
+          var wavg = wsum / isum;
+          if (wavg < 4) V.push(["ظبّط", "المصغرات والعناوين — نسبة النقر " + fmtN(wavg) + "% من " + fmtN(isum) + " ظهور (الصحي 4%+). مصغرة بوجه/رقم كبير وعنوان فيه فضول.", rows.length]);
+          else V.push(["اعمل", "نسبة النقر " + fmtN(wavg) + "% — المصغرات شغالة، متبوظهاش.", rows.length]);
+        }
+        if (is && is.med < 100 && rows.length >= 5) {
+          V.push(["خد بالك", "يوتيوب مش بيعرض فيديوهاتك كفاية (وسط " + fmtN(is.med) + " ظهور للفيديو) — القناة محتاجة عناوين فيها كلمات الناس بتدوّر عليها فعلًا، ونشر ثابت.", rows.length]);
+        }
+      }
+      if (iSubs >= 0) {
+        var subT = 0, anyS = false;
+        rows.forEach(function (r) { var s = num(r[iSubs]); if (s) { subT += s; anyS = true; } });
+        var bestS = -1, bestK = -1;
+        rows.forEach(function (r, k) { var s = num(r[iSubs]); if (s != null && s > bestS) { bestS = s; bestK = k; } });
+        if (anyS && bestK >= 0 && bestS > 0 && iTitle >= 0) {
+          V.push(["اعمل", "تكملة لـ«" + esc(String(rows[bestK][iTitle]).slice(0, 45)) + "» — الفيديو الوحيد اللي جاب مشتركين (" + fmtN(bestS) + "). الفيديوهات اللي بتجيب مشتركين أغلى من اللي بتجيب مشاهدات فاضية.", rows.length]);
+        } else if (!anyS && rows.length >= 5) {
+          V.push(["ظبّط", "ولا فيديو جاب مشترك جديد في الفترة دي — حط طلب اشتراك واضح في أول ١٠ ثواني أو في النهاية.", rows.length]);
+        }
+      }
+      if (iPub >= 0) {
+        var dates = rows.map(function (r) { return parseDateSmart(r[iPub]); }).filter(Boolean);
+        var daySet = {};
+        dates.forEach(function (d) { daySet[d.getDay()] = (daySet[d.getDay()] || 0) + 1; });
+        var dk = Object.keys(daySet);
+        if (dates.length >= 3 && dk.length <= 2) {
+          V.push(["خد بالك", "كل النشر على " + dk.map(function (k) { return DAYS[+k]; }).join(" و") + " بس — انشر في أيام مختلفة عشان نعرف أحسن يوم لجمهورك.", rows.length]);
+        }
+        // معدل النشر
+        if (dates.length >= 3) {
+          dates.sort(function (a, b) { return a - b; });
+          var spanDays = Math.max(1, (dates[dates.length - 1] - dates[0]) / 86400000 + 1);
+          var perWeek = dates.length / spanDays * 7;
+          if (perWeek < 3) V.push(["اعمل", "معدل النشر " + fmtN(perWeek) + " فيديو/أسبوع — قليل لقناة شورتس. ٥+ في الأسبوع بيدّي الخوارزمية فرص أكتر.", rows.length]);
+        }
+      }
+      if (!V.length) V.push(["خد بالك", "البيانات اللي في الملف مش كفاية لقرار حاسم — صدّر بمقاييس أكتر (المشاهدات + مدة المشاهدة + الظهور + نسبة النقر + تاريخ النشر)."]);
+
+      var statsItems = [["فيديوهات", fmtN(rows.length)]];
+      if (vs) { statsItems.push(["إجمالي المشاهدات", fmtN(totalRow && iViews >= 0 && num(totalRow[iViews]) != null ? num(totalRow[iViews]) : vs.sum)]); statsItems.push(["وسط المشاهدات", fmtN(vs.med)]); }
+      if (rs) statsItems.push(["وسط الاحتفاظ", fmtN(rs.med) + "%"]);
+      var detail = "<p class='dim'>اتعرف على: جدول فيديوهات استوديو يوتيوب (" + esc(fname) + "). المقاييس المقروءة: " + esc(found.join("، ") || "ولا واحد") + ".</p>" + statRow(statsItems);
+      if (missing.length) detail += '<p class="dim">عشان قرار أعمق، زوّد في التصدير: ' + esc(missing.join(" • ")) + "</p>";
+      if (vs && iTitle >= 0) {
+        var idx2 = views.map(function (v, k) { return [v == null ? -1 : v, k]; }).sort(function (a, b) { return b[0] - a[0]; });
+        detail += "<p>الأعلى:</p><ul>" + idx2.slice(0, 3).map(function (p) { return "<li>" + esc(String(rows[p[1]][iTitle]).slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>";
+      }
+      return verdictCard(V) + card("📹 التفاصيل (" + esc(fname) + ")", detail);
+    }
+
+    // ---- Chart data (يومي لكل فيديو) و Totals (يومي للقناة) ----
+    function analyzeChart(h, rows, fname) {
+      var iDate = 0, iTitle = colIdx(h, ["video title", "عنوان الفيديو"]), iViews = colIdx(h, ["views", "المشاهدات"]);
+      if (iViews < 0) return analyzeGeneric(h, rows, fname);
+      var perV = {}, days = {};
+      rows.forEach(function (r) {
+        var t = iTitle >= 0 ? String(r[iTitle] || "").slice(0, 45) : "?";
+        var v = num(r[iViews]) || 0;
+        var d = String(r[iDate] || "");
+        if (!perV[t]) perV[t] = [];
+        if (v > 0) perV[t].push([d, v]);
+        days[d] = (days[d] || 0) + v;
+      });
+      var V = [];
+      var died = 0, alive = 0;
+      Object.keys(perV).forEach(function (t) {
+        var dd = perV[t];
+        if (!dd.length) { died++; return; }
+        var firstDay = dd[0][0], lastDay = dd[dd.length - 1][0];
+        if (dd.length === 1) died++; else alive++;
+      });
+      var total = Object.keys(perV).length;
+      if (total >= 3) {
+        if (died >= total * 0.6) V.push(["ظبّط", died + " من " + total + " فيديو بياخد مشاهدات يوم واحد وبعدها صفر — يوتيوب بيوقّف توزيعها فورًا. الحل: عناوين أقوى (بحث) واحتفاظ أعلى عشان الفيديو يعيش أكتر من يوم.", total]);
+        else if (alive > 0) V.push(["اعمل", alive + " فيديو لسه بيجيب مشاهدات بعد يوم النشر — دول الأصول الحقيقية، اعمل لهم أشباه.", total]);
+      }
+      var dv = Object.keys(days).sort().map(function (d) { return [d, days[d]]; });
+      var detail = "<p class='dim'>اتعرف على: بيانات يومية لكل فيديو (" + esc(fname) + ") — " + dv.length + " يوم، " + total + " فيديو.</p>";
+      if (dv.length) detail += "<p>أعلى يوم: <b>" + esc(dv.sort(function (a, b) { return b[1] - a[1]; })[0][0]) + "</b> (" + fmtN(days[dv[0][0]]) + " مشاهدة).</p>";
+      return verdictCard(V) + card("📅 الحركة اليومية (" + esc(fname) + ")", detail);
+    }
+    function analyzeTotals(h, rows, fname) {
+      var iV = colIdx(h, ["views", "المشاهدات"]);
+      if (iV < 0) return analyzeGeneric(h, rows, fname);
+      var pts = rows.map(function (r) { return [String(r[0] || ""), num(r[iV]) || 0]; }).filter(function (p) { return p[0]; });
+      var V = [];
+      var detail = "<p class='dim'>اتعرف على: إجمالي يومي للقناة (" + esc(fname) + ") — " + pts.length + " يوم.</p>";
+      if (pts.length >= 7) {
+        var last3 = stat(pts.slice(-3).map(function (p) { return p[1]; }));
+        var prev = stat(pts.slice(-10, -3).map(function (p) { return p[1]; }));
+        var sum = 0; pts.forEach(function (p) { sum += p[1]; });
+        detail += statRow([["الفترة", pts.length + " يوم"], ["إجمالي", fmtN(sum)], ["آخر ٣ أيام", fmtN(last3 ? last3.sum : 0)]]);
+        if (prev && last3) {
+          if (last3.avg > prev.avg * 1.5 && last3.avg > 0) V.push(["اعمل", "القناة بتصعد: آخر ٣ أيام متوسط " + fmtN(last3.avg) + " مشاهدة/يوم مقابل " + fmtN(prev.avg) + " قبل كده. ثبّت النشر دلوقتي.", pts.length]);
+          else if (last3.avg < prev.avg * 0.5) V.push(["ظبّط", "نزول حاد: آخر ٣ أيام " + fmtN(last3.avg) + "/يوم مقابل " + fmtN(prev.avg) + " — راجع آخر تغيير في المحتوى أو التوقيت.", pts.length]);
+          else if (sum > 0 && last3.avg === 0) V.push(["بطّل", "مفيش مشاهدات خالص آخر ٣ أيام — انشر فورًا، القناة نايمة.", pts.length]);
+          else V.push(["خد بالك", "ثابت على " + fmtN(last3.avg) + " مشاهدة/يوم — النمو محتاج تغيير في الموضوع أو العنوان مش بس استمرارية.", pts.length]);
+        }
+      }
+      return verdictCard(V) + card("📈 ترند القناة (" + esc(fname) + ")", detail);
+    }
+
+    // ---- تصدير ميتا (فيسبوك/إنستجرام Business Suite) ----
+    function analyzeMeta(h, rows, fname) {
+      var iViews = colIdx(h, ["views", "المشاهدات", "plays"]);
+      var iPub = colIdx(h, ["publish time", "وقت النشر", "تاريخ النشر"]);
+      var iType = colIdx(h, ["post type", "نوع المنشور"]);
+      var iDesc = colIdx(h, ["description", "الوصف"]);
+      var iTitle2 = colIdx(h, ["title", "العنوان"]);
+      var iText = iDesc >= 0 ? iDesc : iTitle2;
+      var i3s = colIdx(h, ["3-second video views", "مشاهدات الفيديو لمدة 3 ثوان"]);
+      var i1m = colIdx(h, ["1-minute video views", "مشاهدات الفيديو لمدة دقيقة"]);
+      var iLike = colIdx(h, ["likes", "الإعجابات", "reactions"]);
+      var iCom = colIdx(h, ["comments", "التعليقات"]);
+      var iShare = colIdx(h, ["shares", "عمليات المشاركة"]);
+      var iReach = colIdx(h, ["reach", "الوصول"]);
+      var iFollows = colIdx(h, ["follows", "المتابعات الجديدة"]);
+      rows = rows.filter(function (r) { return r.length > 2; });
+      var views = rows.map(function (r) { return iViews >= 0 ? num(r[iViews]) : null; });
+      var vs = stat(views);
+      var V = [], out = [];
+      var found = [];
+      if (iViews >= 0) found.push("المشاهدات"); if (iPub >= 0) found.push("وقت النشر");
+      if (iType >= 0) found.push("نوع المنشور"); if (iReach >= 0) found.push("الوصول");
+      if (iLike >= 0) found.push("الإعجابات"); if (iCom >= 0) found.push("التعليقات");
+      if (iShare >= 0) found.push("المشاركات"); if (i3s >= 0) found.push("مشاهدات ٣ ثوان");
+      if (i1m >= 0) found.push("مشاهدات الدقيقة"); if (iFollows >= 0) found.push("المتابعات");
+
+      if (vs && iType >= 0) {
+        var byType = {};
+        rows.forEach(function (r, k) { var t = String(r[iType] || "غير معروف"); (byType[t] = byType[t] || []).push(views[k]); });
+        var ts = Object.keys(byType).map(function (t) { return [t, stat(byType[t])]; }).filter(function (p) { return p[1] && p[1].n >= 2; }).sort(function (a, b) { return b[1].avg - a[1].avg; });
+        if (ts.length >= 2) {
+          V.push(["اعمل", "منشورات «" + esc(ts[0][0]) + "» — متوسط " + fmtN(ts[0][1].avg) + " مشاهدة، الأعلى بين الأنواع.", ts[0][1].n]);
+          if (ts[ts.length - 1][1].avg < ts[0][1].avg * 0.5)
+            V.push(["بطّل", "منشورات «" + esc(ts[ts.length - 1][0]) + "» — متوسط " + fmtN(ts[ts.length - 1][1].avg) + " بس (" + fmtN(ts[0][1].avg / ts[ts.length - 1][1].avg) + "× أقل). حوّل مجهودها للنوع الرابح.", ts[ts.length - 1][1].n]);
+        }
+      }
+      if (i3s >= 0 && i1m >= 0) {
+        var ratios = rows.map(function (r) { var a = num(r[i3s]), b = num(r[i1m]); return a && b != null && a > 0 ? b / a * 100 : null; });
+        var hs = stat(ratios);
+        if (hs) {
+          if (hs.med < 10) V.push(["ظبّط", "الخطّاف ميت: " + fmtN(hs.med) + "% بس بيكمّلوا من ٣ ثواني لدقيقة. أول لقطة/جملة لازم تكون الخبر نفسه.", hs.n]);
+          else if (hs.med >= 25) V.push(["اعمل", "الخطّاف قوي (" + fmtN(hs.med) + "% بيكمّلوا لدقيقة) — ثبّت الأسلوب.", hs.n]);
+          else V.push(["ظبّط", "الخطّاف وسط (" + fmtN(hs.med) + "%) — قرّب أقوى معلومة للثانية الأولى.", hs.n]);
+        }
+      }
+      if (iShare >= 0 && vs) {
+        var sh = rows.map(function (r, k) { var s = num(r[iShare]); return s != null && views[k] ? s / views[k] * 100 : null; });
+        var ss = stat(sh);
+        if (ss && ss.med < 0.2) V.push(["ظبّط", "المشاركات قريبة من الصفر (" + fmtN(ss.med) + "% من المشاهدات) — المحتوى اللي بيتبعت هو اللي بيكبّر الصفحات. اختم بسؤال أو معلومة تستاهل البعت.", rows.length]);
+      }
+      if (iFollows >= 0) {
+        var fsum = 0; rows.forEach(function (r) { var f = num(r[iFollows]); if (f) fsum += f; });
+        if (fsum === 0 && rows.length >= 5) V.push(["ظبّط", "مفيش متابعين جدد من المنشورات دي — راجع الدعوة للمتابعة وتسلسل المحتوى.", rows.length]);
+      }
+      if (iPub >= 0) {
+        var parsed = rows.map(function (r, k) { return [parseDateSmart(r[iPub]), views[k]]; }).filter(function (p) { return p[0]; });
+        if (parsed.length >= 4) {
+          var byDay = {}, byHour = {};
+          parsed.forEach(function (p) {
+            var dk = p[0].getDay(), hk = Math.floor(p[0].getHours() / 3) * 3;
+            (byDay[dk] = byDay[dk] || []).push(p[1] || 0);
+            (byHour[hk] = byHour[hk] || []).push(p[1] || 0);
+          });
+          function bestOf(map) { var bk = null, ba = -1; Object.keys(map).forEach(function (k) { var s = stat(map[k]); if (s && s.avg > ba) { ba = s.avg; bk = k; } }); return bk == null ? null : [bk, stat(map[bk])]; }
+          var bd = bestOf(byDay), bh = bestOf(byHour);
+          if (bd && bd[1].n >= 1) V.push(["اعمل", "انشر يوم " + DAYS[+bd[0]] + (bh ? " بين " + (+bh[0]) + " و" + (+bh[0] + 3) : "") + " — متوسط " + fmtN(bd[1].avg) + " مشاهدة هناك (من " + parsed.length + " منشور بتاريخ مقروء).", bd[1].n]);
+        }
+      }
+      if (iText >= 0) {
+        var seen = {}, dupN = 0;
+        rows.forEach(function (r) {
+          var t = String(r[iText] || "").trim().replace(/\s+/g, " ").slice(0, 120);
+          if (!t) return;
+          if (seen[t]) dupN++; else seen[t] = 1;
+        });
+        if (dupN > 0) V.push(["بطّل", dupN + " منشور بوصف مكرر حرفيًا — التكرار بيضرب الوصول (وقاعدتك أصلاً: ممنوع التكرار).", dupN]);
+      }
+      if (!V.length) V.push(["خد بالك", "الملف اتقري (" + rows.length + " منشور) بس المقاييس الموجودة مش كفاية لقرار — الأعمدة المهمة: Views, Publish time, Post type, 3-second و1-minute video views, Shares, Follows."]);
+
+      var detail = "<p class='dim'>اتعرف على: تصدير ميتا Business Suite (" + esc(fname) + "). المقروء: " + esc(found.join("، ") || "ولا عمود معروف") + ".</p>";
+      if (vs) detail += statRow([["منشورات", fmtN(vs.n)], ["وسط المشاهدات", fmtN(vs.med)], ["متوسط", fmtN(vs.avg)], ["الأعلى", fmtN(vs.max)]]);
+      if (vs && iText >= 0) {
+        var idx = views.map(function (v, k) { return [v == null ? -1 : v, k]; }).sort(function (a, b) { return b[0] - a[0]; });
+        detail += "<p>الأعلى:</p><ul>" + idx.slice(0, 3).map(function (p) { return "<li>" + esc(String(rows[p[1]][iText]).slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>" +
+          "<p>الأقل:</p><ul>" + idx.slice(-3).reverse().map(function (p) { return "<li>" + esc(String(rows[p[1]][iText]).slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>";
+      }
+      return verdictCard(V) + card("📘 التفاصيل (" + esc(fname) + ")", detail);
+    }
+
+    // ---- فيسبوك Graph API: تصدير رؤى المنشورات (post_id + created_time_utc) ----
+    function parseUtc(s) {
+      var m = String(s == null ? "" : s).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+      if (!m) return null;
+      return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    }
+    function analyzeFbGraph(h, rows, fname) {
+      var iTime = colIdx(h, ["created_time_utc", "created_time"]);
+      var iMedia = colIdx(h, ["media_type"]);
+      var iMsg = colIdx(h, ["message", "description", "الوصف"]);
+      var iReact = colIdx(h, ["reactions_total", "reactions"]);
+      var iComm = colIdx(h, ["comments_total", "comments"]);
+      var iShare = colIdx(h, ["shares", "عمليات المشاركة"]);
+      var iView = colIdx(h, ["post_media_view", "views", "المشاهدات"]);
+      var iReach = colIdx(h, ["post_total_media_view_unique", "reach", "الوصول"]);
+      var iClicks = colIdx(h, ["post_clicks", "clicks"]);
+      var iVv = colIdx(h, ["post_video_views"]);
+      var V = [];
+      rows = rows.filter(function (r) { return r && r.some(function (c) { return String(c || "").trim(); }); });
+      if (!rows.length) return card("📘 فيسبوك", "<p>الملف مفيهوش منشورات.</p>");
+      function g(r, i) { return i >= 0 ? num(r[i]) : null; }
+      function typeOf(r) {
+        var t = iMedia >= 0 ? String(r[iMedia] || "").trim().toLowerCase() : "";
+        return t === "photo" ? "صور" : t === "video" ? "فيديو" : "نص بس";
+      }
+      var views = rows.map(function (r) { return g(r, iView); });
+      var vs = stat(views);
+      // ١) نوع المنشور: صور × نص × فيديو
+      var groups = {};
+      rows.forEach(function (r, k) { var t = typeOf(r); (groups[t] = groups[t] || []).push(views[k]); });
+      var gStats = Object.keys(groups).map(function (t) { return { t: t, s: stat(groups[t]), n: groups[t].length }; }).filter(function (x) { return x.s && x.n >= 3; });
+      gStats.sort(function (a, b) { return b.s.avg - a.s.avg; });
+      if (gStats.length >= 2) {
+        var best = gStats[0], worst = gStats[gStats.length - 1];
+        V.push(["اعمل", "منشورات «" + best.t + "» — متوسط " + fmtN(Math.round(best.s.avg)) + " مشاهدة (من " + fmtN(best.n) + " منشور)، الأعلى بين الأنواع.", best.n]);
+        if (best.s.avg >= worst.s.avg * 2 && worst.s.avg > 0) V.push(["بطّل", "منشورات «" + worst.t + "» — متوسط " + fmtN(Math.round(worst.s.avg)) + " بس (" + fmtN(Math.round(best.s.avg / Math.max(worst.s.avg, 0.1))) + "× أقل). حوّل مجهودها لـ«" + best.t + "».", worst.n]);
+      } else if (gStats.length === 1) {
+        V.push(["اعمل", "كل منشوراتك تقريبًا «" + gStats[0].t + "» (متوسط " + fmtN(Math.round(gStats[0].s.avg)) + " مشاهدة) — جرّب تنوّع بسيط عشان تقيس الأفضل.", gStats[0].n]);
+      }
+      // ٢) أحسن ساعة نشر (توقيت دبي = UTC+4)
+      if (iTime >= 0) {
+        var byHour = {};
+        rows.forEach(function (r, k) {
+          var t = parseUtc(r[iTime]); if (t == null || views[k] == null) return;
+          var hr = (new Date(t).getUTCHours() + 4) % 24;
+          (byHour[hr] = byHour[hr] || []).push(views[k]);
+        });
+        var hStats = Object.keys(byHour).map(function (hr) { return { hr: +hr, s: stat(byHour[hr]), n: byHour[hr].length }; }).filter(function (x) { return x.n >= 3; });
+        hStats.sort(function (a, b) { return b.s.avg - a.s.avg; });
+        if (hStats.length) {
+          var bh = hStats[0];
+          V.push(["اعمل", "انشر حوالين الساعة " + bh.hr + " بتوقيت دبي — متوسط " + fmtN(Math.round(bh.s.avg)) + " مشاهدة في الساعة دي (من " + fmtN(bh.n) + " منشور).", bh.n]);
+        }
+      }
+      // ٣) السلاسل (سلسلة / رقم / جزء في النص)
+      if (iMsg >= 0) {
+        var ser = [], non = [];
+        rows.forEach(function (r, k) {
+          if (views[k] == null) return;
+          var msg = String(r[iMsg] || "");
+          (/سلسلة|رقم\s*\d+|\(رقم|جزء/.test(msg) ? ser : non).push(views[k]);
+        });
+        var ss = stat(ser), ns = stat(non);
+        if (ss && ns && ser.length >= 3 && non.length >= 3) {
+          if (ss.avg >= ns.avg * 1.3) V.push(["اعمل", "السلاسل بتكسب — متوسط " + fmtN(Math.round(ss.avg)) + " مشاهدة مقابل " + fmtN(Math.round(ns.avg)) + " للمنفرد. كمّل السلاسل ورقّمها.", Math.min(ser.length, non.length)]);
+          else if (ns.avg >= ss.avg * 1.3) V.push(["ظبّط", "السلاسل أقل من المنفرد (" + fmtN(Math.round(ss.avg)) + " مقابل " + fmtN(Math.round(ns.avg)) + ") — راجع عناوين السلسلة أو موضوعاتها.", Math.min(ser.length, non.length)]);
+        }
+        // التكرار (قاعدة بيشو: ممنوع التكرار)
+        var seen = {}, dups = 0;
+        rows.forEach(function (r) {
+          var msg = String(r[iMsg] || "").replace(/\s+/g, " ").trim().slice(0, 80);
+          if (msg.length < 20) return;
+          if (seen[msg]) dups++; else seen[msg] = 1;
+        });
+        if (dups) V.push(["بطّل", fmtN(dups) + " منشور بنص مكرر — التكرار بيضرب الوصول (وقاعدتك أصلاً: ممنوع التكرار).", dups]);
+      }
+      // ٤) المشاركات والتعليقات (أقوى إشارة)
+      var shSum = 0, cmSum = 0, topShare = null;
+      rows.forEach(function (r, k) {
+        var sh = g(r, iShare) || 0, cm = g(r, iComm) || 0;
+        shSum += sh; cmSum += cm;
+        if (sh > 0 && (!topShare || sh > topShare.sh)) topShare = { sh: sh, k: k };
+      });
+      if (rows.length && (shSum + cmSum) / rows.length < 0.5) {
+        V.push(["ظبّط", "التفاعل ضعيف — " + fmtN(shSum) + " مشاركة و" + fmtN(cmSum) + " تعليق في " + fmtN(rows.length) + " منشور. اختم كل منشور بسؤال صريح (مثال: «حصلت معاك قبل كده؟»)."]);
+      } else if (topShare && iMsg >= 0) {
+        V.push(["اعمل", "أكتر منشور اتشار («" + esc(String(rows[topShare.k][iMsg] || "بدون نص").slice(0, 45)) + "» — " + fmtN(topShare.sh) + " مشاركة) — اعمل منه سلسلة.", rows.length]);
+      }
+      // ٥) الوصول × المشاهدات
+      var vSum = 0, rSum = 0;
+      rows.forEach(function (r) { vSum += g(r, iView) || 0; rSum += g(r, iReach) || 0; });
+      if (rSum > 0) {
+        var per = vSum / rSum;
+        if (per < 1.3) V.push(["خد بالك", "كل شخص بيشوف المنشور مرة واحدة تقريبًا (" + fmtN(vSum) + " مشاهدة / " + fmtN(rSum) + " وصول) — مفيش إعادة مشاهدة؛ المحتوى محتاج سبب يرجّع الناس.", rows.length]);
+        else V.push(["اعمل", "الناس بترجع للمنشور (" + per.toFixed(1) + " مشاهدة لكل شخص) — ده أسلوب يتكرر.", rows.length]);
+      }
+      // ٦) معدل النشر
+      if (iTime >= 0) {
+        var ts = rows.map(function (r) { return parseUtc(r[iTime]); }).filter(function (t) { return t != null; }).sort(function (a, b) { return a - b; });
+        if (ts.length >= 4) {
+          var weeks = Math.max((ts[ts.length - 1] - ts[0]) / 6048e5, 0.5);
+          var rate = ts.length / weeks;
+          if (rate < 3) V.push(["ظبّط", "معدل النشر " + rate.toFixed(1) + " منشور/أسبوع — قليل للخوارزمية. استهدف ٥+ في الأسبوع.", ts.length]);
+          else V.push(["اعمل", "معدل النشر " + rate.toFixed(1) + " منشور/أسبوع — كويس، حافظ عليه بجدول ثابت.", ts.length]);
+        }
+      }
+      // ٧) الفيديو لو كل قيمه صفر
+      if (iVv >= 0) {
+        var anyVid = rows.some(function (r) { return typeOf(r) === "فيديو"; });
+        var vvSum = rows.reduce(function (a, r) { return a + (g(r, iVv) || 0); }, 0);
+        if (anyVid && vvSum === 0) V.push(["خد بالك", "عندك فيديو بس مشاهدات الفيديو كلها صفر في التصدير — لو فعلاً فيديوهاتك مهمة، راجع طريقة النشر (رفع مباشر مش رابط)."]);
+      }
+      var found = [];
+      if (iView >= 0) found.push("المشاهدات");
+      if (iReach >= 0) found.push("الوصول الفريد");
+      if (iShare >= 0) found.push("المشاركات");
+      if (iComm >= 0) found.push("التعليقات");
+      if (iReact >= 0) found.push("التفاعلات");
+      if (iClicks >= 0) found.push("النقرات");
+      var statsItems = [["منشورات", fmtN(rows.length)]];
+      if (vs) { statsItems.push(["إجمالي المشاهدات", fmtN(vs.sum)]); statsItems.push(["وسط المشاهدات", fmtN(vs.med)]); }
+      if (rSum) statsItems.push(["إجمالي الوصول", fmtN(rSum)]);
+      statsItems.push(["مشاركات/تعليقات", fmtN(shSum) + "/" + fmtN(cmSum)]);
+      var detail = "<p class='dim'>اتعرف على: تصدير رؤى فيسبوك (Graph API) — منشورات الصفحة (" + esc(fname) + "). المقاييس: " + esc(found.join("، ")) + ".</p>" + statRow(statsItems);
+      if (iMsg >= 0 && vs) {
+        var idx = views.map(function (v, k) { return [v == null ? -1 : v, k]; }).sort(function (a, b) { return b[0] - a[0]; });
+        detail += "<p>الأعلى:</p><ul>" + idx.slice(0, 3).map(function (p) { return "<li>" + esc(String(rows[p[1]][iMsg] || "(بدون نص)").slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>" +
+          "<p>الأقل:</p><ul>" + idx.slice(-3).reverse().map(function (p) { return "<li>" + esc(String(rows[p[1]][iMsg] || "(بدون نص)").slice(0, 55)) + " — <b>" + fmtN(p[0]) + "</b></li>"; }).join("") + "</ul>";
+      }
+      return verdictCard(V) + card("📘 منشورات فيسبوك (" + esc(fname) + ")", detail);
+    }
+
+    // ---- فيسبوك Graph API: الحركة اليومية للصفحة (date_end_time_utc) ----
+    function analyzeFbDaily(h, rows, fname) {
+      var iDate = colIdx(h, ["date_end_time_utc", "date"]);
+      var iViews = colIdx(h, ["page_media_view", "views"]);
+      var iReach = colIdx(h, ["page_total_media_view_unique", "reach"]);
+      var iEng = colIdx(h, ["page_post_engagements", "engagements"]);
+      var iFol = colIdx(h, ["page_daily_follows", "follows"]);
+      var V = [];
+      rows = rows.filter(function (r) { return r && String(r[iDate] || "").trim(); });
+      if (rows.length < 4) return card("📘 الحركة اليومية", "<p>أيام قليلة أوي في الملف.</p>");
+      var views = rows.map(function (r) { return iViews >= 0 ? num(r[iViews]) || 0 : 0; });
+      var half = Math.floor(rows.length / 2);
+      var first = stat(views.slice(0, half)), second = stat(views.slice(half));
+      if (first && second) {
+        if (second.avg > first.avg * 1.5) V.push(["اعمل", "المشاهدات اليومية طالعة — متوسط " + fmtN(Math.round(second.avg)) + "/يوم آخر فترة مقابل " + fmtN(Math.round(first.avg)) + " قبلها. اللي بتعمله مؤخرًا شغال، كمّل.", half]);
+        else if (first.avg > 0 && second.avg < first.avg * 0.6) V.push(["ظبّط", "المشاهدات اليومية نازلة — " + fmtN(Math.round(second.avg)) + "/يوم بعد ما كانت " + fmtN(Math.round(first.avg)) + ". ارجع للمنشورات اللي كانت ماشية.", half]);
+        else V.push(["خد بالك", "المشاهدات اليومية ثابتة تقريبًا (" + fmtN(Math.round(second.avg)) + "/يوم) — محتاجة دفعة: سلسلة جديدة أو تعاون.", half]);
+      }
+      if (iFol >= 0) {
+        var fol = rows.reduce(function (a, r) { return a + (num(r[iFol]) || 0); }, 0);
+        var vw = views.reduce(function (a, b) { return a + b; }, 0);
+        if (vw > 100 && fol / Math.max(rows.length, 1) < 0.2) V.push(["ظبّط", "المشاهدات مش بتتحول لمتابعة — " + fmtN(fol) + " متابعة جديدة في " + fmtN(rows.length) + " يوم رغم " + fmtN(vw) + " مشاهدة. اطلب المتابعة صراحة في أول سطر.", rows.length]);
+        else if (fol > 0) V.push(["اعمل", "في " + fmtN(fol) + " متابعة جديدة في الفترة دي — الزخم بيبني.", rows.length]);
+      }
+      if (iEng >= 0) {
+        var eng = stat(rows.map(function (r) { return num(r[iEng]); }));
+        if (eng && views.reduce(function (a, b) { return a + b; }, 0) > 0) {
+          var ratio = eng.sum / views.reduce(function (a, b) { return a + b; }, 0) * 100;
+          if (ratio < 2) V.push(["ظبّط", "التفاعل " + ratio.toFixed(1) + "% من المشاهدات — الناس بتتفرج وبتعدي. سؤال في آخر كل منشور بيرفع النسبة دي.", rows.length]);
+        }
+      }
+      var statsItems = [["أيام", fmtN(rows.length)]];
+      if (iViews >= 0) statsItems.push(["إجمالي المشاهدات", fmtN(views.reduce(function (a, b) { return a + b; }, 0))]);
+      if (iReach >= 0) statsItems.push(["إجمالي الوصول", fmtN(rows.reduce(function (a, r) { return a + (num(r[iReach]) || 0); }, 0))]);
+      var detail = "<p class='dim'>اتعرف على: الحركة اليومية لصفحة فيسبوك (Graph API) (" + esc(fname) + ").</p>" + statRow(statsItems);
+      return verdictCard(V) + card("📘 الحركة اليومية (" + esc(fname) + ")", detail);
+    }
+
+    // ---- تيك آوت: سجل المشاهدة (JSON أو HTML) ----
+    function analyzeTakeout(entries, fname) {
+      var chan = {}, hours = new Array(24).fill(0), n = 0, t0 = null, t1 = null;
+      entries.forEach(function (e) {
+        if (!e.title) return;
+        n++;
+        if (e.channel) chan[e.channel] = (chan[e.channel] || 0) + 1;
+        var d = e.time ? new Date(e.time) : null;
+        if (d && !isNaN(d)) {
+          hours[d.getHours()]++;
+          if (!t0 || d < t0) t0 = d; if (!t1 || d > t1) t1 = d;
+        }
+      });
+      var topC = Object.keys(chan).map(function (k) { return [k, chan[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
+      var bestH = 0; hours.forEach(function (v, i) { if (v > hours[bestH]) bestH = i; });
+      var V = [["خد بالك", "ده سجل مشاهدتك إنت من جوجل تيك آوت، مش أداء قناة. أرقام قناتك هاتها من استوديو يوتيوب ← الوضع المتقدّم ← تصدير (الخطوات فوق)."]];
+      return verdictCard(V) + card("👀 سجل المشاهدة (" + esc(fname) + ")",
+        "<p>" + fmtN(n) + " مشاهدة" + (t0 && t1 ? "، من " + t0.toLocaleDateString("ar-EG") + " لـ " + t1.toLocaleDateString("ar-EG") : "") + ".</p>" +
+        (topC.length ? "<p>أكتر قنوات بتتفرج عليها:</p><ul>" + topC.map(function (p) { return "<li>" + esc(p[0]) + " (" + fmtN(p[1]) + ")</li>"; }).join("") + "</ul>" : "") +
+        "<p>أكتر ساعة بتتفرج فيها: حوالي <b>" + bestH + ":00</b>.</p>");
+    }
+    function parseTakeoutJSON(text) {
+      var arr = JSON.parse(text);
+      if (!Array.isArray(arr)) return null;
+      return arr.map(function (e) {
+        if (!e || typeof e !== "object") return null;
+        var title = String(e.title || "").replace(/^Watched ?|^Watched /, "");
+        var ch = null;
+        if (Array.isArray(e.subtitles) && e.subtitles[0]) ch = e.subtitles[0].name || null;
+        if (e.details) return null;
+        return { title: title || null, channel: ch, time: e.time || null };
+      }).filter(function (e) { return e && e.title; });
+    }
+    function parseTakeoutHTML(text) {
+      var out = [], m;
+      var re = /Watched(?:&nbsp;| )<a href="[^"]*"[^>]*>(.*?)<\/a>(?:<br\s*\/?>(?:<a href="[^"]*"[^>]*>(.*?)<\/a>)<br\s*\/?>([^<]*)|)/g;
+      while ((m = re.exec(text)) && out.length < 60000) out.push({ title: m[1] || null, channel: m[2] || null, time: m[3] || null });
+      return out.filter(function (e) { return e.title; });
+    }
+
+    // ---- فيسبوك الشخصي (تنزيل معلوماتك) ----
+    function analyzeFbPersonal(arr, fname) {
+      var posts = arr.filter(function (e) { return e && (e.timestamp || e.data); });
+      var t0 = null, t1 = null;
+      posts.forEach(function (e) {
+        var d = e.timestamp ? new Date(e.timestamp * 1000) : null;
+        if (d && !isNaN(d)) { if (!t0 || d < t0) t0 = d; if (!t1 || d > t1) t1 = d; }
+      });
+      var V = [["خد بالك", "ده أرشيف منشوراتك الشخصي من «تنزيل معلوماتك» — مفيهوش ولا رقم أداء. الأرقام من Meta Business Suite ← الرؤى ← المحتوى ← تصدير (الخطوات فوق)."]];
+      return verdictCard(V) + card("📘 أرشيف شخصي (" + esc(fname) + ")",
+        "<p>" + fmtN(posts.length) + " منشور" + (t0 ? "، من " + t0.toLocaleDateString("ar-EG") + " لـ " + t1.toLocaleDateString("ar-EG") : "") + ".</p>");
+    }
+
+    function analyzeGeneric(h, rows, fname) {
+      var iV = colIdx(h, ["views", "المشاهدات", "reach", "plays"]);
+      if (iV < 0) return card("🤔 مش قادرين نتعرف على نوع الملف — " + esc(fname),
+        "<p>اتقري كجدول (" + rows.length + " صف) بس الأعمدة مش مألوفة. أول الأعمدة: <span class='dim'>" + esc(h.slice(0, 10).join(" | ")) + "</span></p><p>صدّر من المصادر المذكورة فوق وارفع الملف زي ما هو.</p>");
+      var vs = stat(rows.map(function (r) { return num(r[iV]); }));
+      return card("📊 قراءة عامة — " + esc(fname),
+        "<p>" + rows.length + " صف، عمود الأرقام: «" + esc(h[iV]) + "».</p>" +
+        (vs ? statRow([["صفوف", fmtN(vs.n)], ["المتوسط", fmtN(vs.avg)], ["الأعلى", fmtN(vs.max)]]) : ""));
+    }
+
+    function analyzeText(name, text) {
+      var t = String(text).replace(/^﻿/, "");
+      var first = t.slice(0, 400).trim();
+      if (first[0] === "[" || first[0] === "{") {
+        try {
+          var j = JSON.parse(t);
+          if (Array.isArray(j)) {
+            if (j[0] && (String(j[0].title || "").indexOf("Watched") === 0 || j[0].header === "YouTube")) return analyzeTakeout(parseTakeoutJSON(t), name);
+            return analyzeFbPersonal(j, name);
+          }
+          return card("🤔 JSON مش مألوف — " + esc(name), "<p>الملف اتقري بس شكله مش من الصيغ اللي نعرفها.</p>");
+        } catch (e) {
+          return card("⚠️ JSON مكسور — " + esc(name), "<p>الملف مش مكتمل أو متقصوص. الصقه كله أو ارفع الملف نفسه.</p>");
+        }
+      }
+      if (/<[a-z][\s\S]*>/i.test(first)) {
+        var entries = parseTakeoutHTML(t);
+        if (entries.length) return analyzeTakeout(entries, name);
+        return card("🤔 صفحة HTML مش مألوفة — " + esc(name), "<p>مش لاقيين فيها سجل مشاهدة يوتيوب.</p>");
+      }
+      var rows = parseCSV(t);
+      if (rows.length < 2) return card("⚠️ مفيش بيانات — " + esc(name), "<p>الملف فاضي أو مش بصيغة جدول.</p>");
+      var s = sniffCSV(rows);
+      if (s.kind === "meta") return analyzeMeta(s.h, s.rows, name);
+      if (s.kind === "fbgraph") return analyzeFbGraph(s.h, s.rows, name);
+      if (s.kind === "fbdaily") return analyzeFbDaily(s.h, s.rows, name);
+      if (s.kind === "studio") return analyzeStudio(s.h, s.rows, name);
+      if (s.kind === "chart") return analyzeChart(s.h, s.rows, name);
+      if (s.kind === "totals") return analyzeTotals(s.h, s.rows, name);
+      return analyzeGeneric(s.h, s.rows, name);
+    }
+
+    // ---- فك ZIP (STORE و DEFLATE) من غير مكتبات ----
+    function unzipTexts(buf) {
+      return new Promise(function (resolve, reject) {
+        try {
+          var dv = new DataView(buf), len = dv.byteLength, i, out = [];
+          var eocd = -1;
+          for (i = len - 22; i >= 0 && i >= len - 66000; i--) {
+            if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+          }
+          if (eocd < 0) return reject(new Error("مش ملف ZIP"));
+          var count = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true);
+          var dec = new TextDecoder("utf-8"), jobs = [];
+          for (i = 0; i < count && off < len; i++) {
+            if (dv.getUint32(off, true) !== 0x02014b50) break;
+            var method = dv.getUint16(off + 10, true);
+            var csize = dv.getUint32(off + 20, true);
+            var nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+            var lho = dv.getUint32(off + 42, true);
+            var name = dec.decode(new Uint8Array(buf, off + 46, nlen));
+            off += 46 + nlen + elen + clen;
+            if (!/\.(csv|json|html?|txt)$/i.test(name) || csize > 12 * 1024 * 1024) continue;
+            if (out.length >= 12) continue;
+            (function (nm, mth, cs, lo) {
+              jobs.push(new Promise(function (res) {
+                try {
+                  var lnlen = dv.getUint16(lo + 26, true), lelen = dv.getUint16(lo + 28, true);
+                  var start = lo + 30 + lnlen + lelen;
+                  var data = new Uint8Array(buf, start, cs);
+                  if (mth === 0) { out.push({ name: nm, text: dec.decode(data) }); return res(); }
+                  if (mth === 8 && "DecompressionStream" in window) {
+                    var ds = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+                    new Response(ds).text().then(function (txt) { out.push({ name: nm, text: txt }); res(); }, function () { res(); });
+                  } else res();
+                } catch (e) { res(); }
+              }));
+            })(name, method, csize, lho);
+          }
+          Promise.all(jobs).then(function () { resolve(out); });
+        } catch (e) { reject(e); }
+      });
+    }
+
+    function storeKey() { return "mk_channel_v1_" + prop; }
+    function renderParts(parts, note) {
+      var html = parts.join("");
+      outEl.innerHTML = html;
+      try { localStorage.setItem(storeKey(), JSON.stringify({ when: Date.now(), html: html })); } catch (e) {}
+      stEl.textContent = note || "خلّصنا. النتيجة اتحفظت على جهازك.";
+    }
+    function loadSaved() {
+      outEl.innerHTML = "";
+      try {
+        var saved = JSON.parse(localStorage.getItem(storeKey()) || "null");
+        if (saved && saved.html) {
+          outEl.innerHTML = saved.html;
+          stEl.textContent = "آخر تحليل محفوظ لـ«" + PROPS[prop] + "» (" + new Date(saved.when).toLocaleString("ar-EG") + ").";
+          return;
+        }
+      } catch (e) {}
+      stEl.textContent = "اختار ملف تصدير «" + PROPS[prop] + "» أو الصقه.";
+    }
+    document.querySelectorAll("#chProps button").forEach(function (b) {
+      if (b.dataset.prop === prop) b.classList.add("active");
+      b.addEventListener("click", function () {
+        prop = b.dataset.prop;
+        try { localStorage.setItem(PROP_KEY, prop); } catch (e) {}
+        document.querySelectorAll("#chProps button").forEach(function (x) { x.classList.toggle("active", x === b); });
+        try { sfxStep(); } catch (e) {}
+        loadSaved();
+      });
+    });
+    function runFiles(list) {
+      var parts = [], done = 0, total = list.length;
+      if (!total) return;
+      stEl.textContent = "بنقرأ " + total + " ملف...";
+      list.forEach(function (f, k) {
+        var finish = function (html) {
+          parts[k] = html; done++;
+          if (done === total) renderParts(parts, "اتحلل " + total + " ملف لـ«" + PROPS[prop] + "». النتيجة اتحفظت على جهازك.");
+        };
+        var isZip = /\.zip$/i.test(f.name);
+        if (isZip || (f.text && f.text.slice(0, 2) === "PK")) {
+          var go = f.buffer ? Promise.resolve(f.buffer) : (f.file ? f.file.arrayBuffer() : Promise.reject(new Error("no buf")));
+          go.then(function (ab) { return unzipTexts(ab); }).then(function (entries) {
+            if (!entries.length) return finish(card("⚠️ ZIP من غير ملفات نصية — " + esc(f.name), "<p>فك الضغط مش متاح في المتصفح ده أو الملفات جواه مش CSV/JSON/HTML. فك الضغط على جهازك وارفع اللي جواه.</p>"));
+            finish(entries.map(function (e) { return analyzeText(e.name + " (جوّه " + f.name + ")", e.text); }).join(""));
+          }).catch(function (e) {
+            finish(card("⚠️ مش قادرين نقرا الـ ZIP — " + esc(f.name), "<p>" + esc(e.message || e) + "</p>"));
+          });
+        } else if (f.text != null) {
+          finish(analyzeText(f.name, f.text));
+        } else {
+          var rd = new FileReader();
+          rd.onload = function () { finish(analyzeText(f.file.name, rd.result)); };
+          rd.onerror = function () { finish(card("⚠️ قراءة فشلت — " + esc(f.file.name), "")); };
+          rd.readAsText(f.file);
+        }
+      });
+    }
+
+    fileEl.addEventListener("change", function () {
+      var list = [];
+      for (var i = 0; i < fileEl.files.length && i < 10; i++) list.push({ name: fileEl.files[i].name, file: fileEl.files[i] });
+      if (list.length) { try { sfxGo(); } catch (e) {} runFiles(list); }
+      fileEl.value = "";
+    });
+    document.getElementById("chGo").addEventListener("click", function () {
+      var txt = pasteEl.value.trim();
+      if (!txt) { stEl.textContent = "الصق محتوى ملف الأول، أو اختار ملف من فوق."; return; }
+      try { sfxGo(); } catch (e) {}
+      renderParts([analyzeText("نص ملصوق", txt)], "اتحلل النص الملصوق لـ«" + PROPS[prop] + "». النتيجة اتحفظت على جهازك.");
+    });
+    document.getElementById("chClear").addEventListener("click", function () {
+      outEl.innerHTML = ""; pasteEl.value = ""; stEl.textContent = "";
+      try { localStorage.removeItem(storeKey()); } catch (e) {}
+    });
+    loadSaved();
+  })();
 })();
