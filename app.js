@@ -263,7 +263,7 @@
 
 
   // ---------- النسخة والتحديث التلقائي على نفس الرابط ----------
-  var APP_VERSION = "15";
+  var APP_VERSION = "16";
   var verTag = document.getElementById("verTag");
   if (verTag) verTag.textContent = "النسخة " + APP_VERSION;
   var updatePending = false;
@@ -1155,6 +1155,7 @@
     statusEl.textContent = "محرك الحساب ما اتحمّلش: " + e;
   });
 
+
   // ---------- قناتك: تحليل أداء فيسبوك ويوتيوب من ملفات التصدير نفسها ----------
   (function () {
     var fileEl = document.getElementById("chFile");
@@ -1165,7 +1166,8 @@
     var PROPS = {
       tr_yt: "تريند رادار — يوتيوب",
       mh_yt: "المهندس — يوتيوب",
-      mh_fb: "المهندس — فيسبوك"
+      mh_fb: "المهندس — فيسبوك",
+      tt: "تيك توك — @bishoy.nabil80"
     };
     var PROP_KEY = "mk_channel_prop";
     var prop = "tr_yt";
@@ -1263,7 +1265,7 @@
     var VICON = { "اعمل": "✅", "بطّل": "🛑", "ظبّط": "🛠️", "خد بالك": "👀" };
     function verdictCard(verdicts) {
       if (!verdicts.length) return "";
-      return card("🎯 الخلاصة — القرار لـ " + esc(PROPS[prop]),
+      return card("🎯 الخلاصة — القرار لـ " + esc(curPlat && curPlat !== platOfProp(prop) ? PLATNAME[curPlat] : PROPS[prop]),
         "<ul>" + verdicts.map(function (v) {
           var conf = "";
           if (typeof v[2] === "number") {
@@ -1288,6 +1290,11 @@
     function sniffCSV(rows) {
       var h = rows[0].map(function (x) { return String(x || "").trim(); });
       var low0 = (h[0] || "").toLowerCase();
+      var hl = h.map(function (x) { return x.toLowerCase(); });
+      if (hl.indexOf("profile views") >= 0 || (hl.indexOf("video views") >= 0 && (hl.indexOf("likes") >= 0 || hl.indexOf("new followers") >= 0)) || hl.indexOf("total play time") >= 0 || hl.indexOf("full video watched rate") >= 0)
+        return { kind: "tiktok", h: h, rows: rows.slice(1) };
+      if (h.length <= 3 && /^(gender|age|age group|country\/region|country|territory|territories|location|top territories)$/.test(low0) && /distribution|percentage|share|%/.test(hl.slice(1).join(" ")))
+        return { kind: "ttdist", h: h, rows: rows.slice(1) };
       if ((low0 === "date" || h[0] === "التاريخ") && h.length >= 2) {
         if ((h[1] || "").toLowerCase() === "content" || h[1] === "المحتوى") return { kind: "chart", h: h, rows: rows.slice(1) };
         return { kind: "totals", h: h, rows: rows.slice(1) };
@@ -2040,12 +2047,177 @@
         (vs ? statRow([["صفوف", fmtN(vs.n)], ["المتوسط", fmtN(vs.avg)], ["الأعلى", fmtN(vs.max)]]) : ""));
     }
 
+    // ---------- تيك توك + الكشف التلقائي عن المنصة ----------
+    var curPlat = "";
+    var PLATNAME = { yt: "يوتيوب", fb: "فيسبوك", tt: "تيك توك" };
+    function platOfProp(p) { return p === "tt" ? "tt" : p === "mh_fb" ? "fb" : "yt"; }
+    function platOfKind(k) {
+      if (k === "tiktok" || k === "ttdist") return "tt";
+      if (k === "meta" || k === "fbgraph" || k === "fbdaily" || k === "fbextra") return "fb";
+      if (k === "generic") return "";
+      return "yt";
+    }
+    function detectPlatform(text, name) {
+      var t = String(text).replace(/^﻿/, "");
+      var first = t.slice(0, 600).trim();
+      if (/TikTok Studio/i.test(first) || /Total viewers[\s\S]{0,400}New viewers/i.test(t) || (/Video views/i.test(t) && /For You/i.test(t) && /Profile views/i.test(t))) return "tt";
+      if (first[0] === "{" || first[0] === "[") {
+        try {
+          var j = JSON.parse(t);
+          if (Array.isArray(j)) {
+            if (j[0] && (String(j[0].title || "").indexOf("Watched") === 0 || j[0].header === "YouTube")) return "yt";
+            return "fb";
+          }
+          var ks = Object.keys(j).join(",").toLowerCase();
+          if (/\b(activity|video|profile)\b/.test(ks) && /(tiktok|videolist|login history|favorite)/i.test(t.slice(0, 20000))) return "tt";
+          return "";
+        } catch (e) { return ""; }
+      }
+      if (/<[a-z][\s\S]*>/i.test(first)) return /YouTube|youtube\.com/i.test(t.slice(0, 5000)) ? "yt" : "";
+      var rows = parseCSV(t);
+      if (rows.length < 2) return "";
+      return platOfKind(sniffCSV(rows).kind);
+    }
+    function parseShares(seg) {
+      var out = [], re = /([A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF .'\-\/+]*?)\s*[:\s]\s*(\d+(?:\.\d+)?)\s*%/g, m;
+      while ((m = re.exec(seg))) out.push([m[1].trim(), parseFloat(m[2])]);
+      return out;
+    }
+    function ttBlock(txt, startLbl, endLbls) {
+      var i = txt.search(new RegExp("\\b" + startLbl + "\\b"));
+      if (i < 0) return "";
+      var rest = txt.slice(i + startLbl.length), end = rest.length;
+      endLbls.forEach(function (l) { var k = rest.search(new RegExp("\\b" + l + "\\b")); if (k >= 0 && k < end) end = k; });
+      return rest.slice(0, end).replace(/\s+/g, " ");
+    }
+    var ARAB = { "united arab emirates": 1, "saudi arabia": 1, "qatar": 1, "kuwait": 1, "iraq": 1, "oman": 1, "bahrain": 1, "jordan": 1, "palestine": 1, "lebanon": 1, "libya": 1, "morocco": 1, "algeria": 1, "tunisia": 1, "sudan": 1, "yemen": 1, "syria": 1 };
+    function ttShareVerdicts(V, locs, gender, age, n, tag) {
+      if (locs.length) {
+        var eg = 0, top = locs[0];
+        locs.forEach(function (l) { if (/^egypt$/i.test(l[0]) || l[0] === "مصر") eg = l[1]; });
+        if (eg < 30 && top && !/^egypt$/i.test(top[0])) {
+          V.push(["ظبّط", "جمهورك على تيك توك مش مصري: " + top[0] + " " + fmtN(top[1]) + "% ومصر " + fmtN(eg) + "% بس (الهدف مصر). المحتوى بيتوزّع على اللي تيك توك بيجرّبه عليهم — لو عايز مصر، اكتب بلهجة مصرية واضحة وكلمات تخص مصر وانشر بالتوقيت المصري، وراقب النسبة بعد ٥–١٠ فيديوهات.", n]);
+        } else if (eg >= 40) V.push(["اعمل", "مصر " + fmtN(eg) + "% من المشاهدين — جمهورك الصح، كمّل بنفس الأسلوب.", n]);
+      }
+      if (gender.length) { var g0 = gender.slice().sort(function (a, b) { return b[1] - a[1]; })[0]; V.push(["خد بالك", "أكبر شريحة جنس: " + g0[0] + " " + fmtN(g0[1]) + "% — اكتب للشريحة دي مش لجمهور بتتمناه.", n]); }
+      if (age.length) { var a0 = age.slice().sort(function (a, b) { return b[1] - a[1]; })[0]; V.push(["خد بالك", "أكبر شريحة عمر: " + a0[0] + " (" + fmtN(a0[1]) + "%) — ده جمهور فني/مهني مش مراهقين؛ الأسلوب الجاد أنسب من الترند.", n]); }
+    }
+    function analyzeTikTokScreen(t, fname) {
+      function g(label) {
+        var m = String(t).match(new RegExp(label + "\\s*[:\\s]\\s*([\\d,\\.]+)", "i"));
+        return m ? num(m[1]) : null;
+      }
+      var views = g("Video views"), pv = g("Profile views"), likes = g("Likes"), com = g("Comments"), sh = g("Shares");
+      var viewers = g("Total viewers"), nv = g("New viewers"), fol = g("Total followers"), nf = g("Net followers");
+      var flat = String(t).replace(/\s+/g, " ");
+      var trafficSeg = ttBlock(flat, "Traffic source", ["Total viewers", "Gender", "Search queries", "Total followers"]);
+      var traffic = parseShares(trafficSeg);
+      var gender = parseShares(ttBlock(flat, "Gender", ["Age", "Locations"]));
+      var age = parseShares(ttBlock(flat, "Age", ["Locations", "Total followers"]));
+      var locs = parseShares(ttBlock(flat, "Locations", ["Total followers", "Net followers", "Top post", "Most active"]));
+      var topPost = flat.match(/Top post[^:]*:\s*(\d+)\s*views of\s*(\d+)/i);
+      var V = [];
+      var nv1 = views == null ? 1 : (topPost ? 1 : 1);
+      if (traffic.length) {
+        var fy = 0; traffic.forEach(function (x) { if (/for you/i.test(x[0])) fy = x[1]; });
+        if (fy >= 90) V.push(["خد بالك", "كل المشاهدات تقريبًا (" + fmtN(fy) + "%) من «For You» — يعني تيك توك بس هو اللي بيوزّعك؛ مفيش متابعين ولا بحث ولا صوت بيجيبوا ناس. اللي يتحسّن بالـ Hook (أول ٢ ثانية) مش بالهاشتاجات.", nv1]);
+        var srch = 0; traffic.forEach(function (x) { if (/search/i.test(x[0])) srch = x[1]; });
+        if (srch === 0) V.push(["ظبّط", "البحث ٠٪: مفيش حد بيلاقيك بالبحث. حط الكلمة اللي الناس بتسأل عنها (مثلًا «سيريا كهربائية») في أول جملة بالصوت وعلى الشاشة، لأن تيك توك بيفهرس الكلام.", nv1]);
+      }
+      if (views != null && likes != null) {
+        var eng = ((likes || 0) + (com || 0) + (sh || 0)) / Math.max(views, 1) * 100;
+        V.push([eng < 3 ? "ظبّط" : "خد بالك", "التفاعل: " + fmtN(likes) + " لايك + " + fmtN(com || 0) + " تعليق + " + fmtN(sh || 0) + " مشاركة على " + fmtN(views) + " مشاهدة = " + fmtN(Math.round(eng * 10) / 10) + "% . المشاركات صفر — أقوى إشارة توزيع ناقصة؛ اختم الفيديو بسؤال/تحدي يخلّي حد يبعته لزميل في الشغل.", nv1]);
+      }
+      if (viewers != null && nv != null && viewers > 0) {
+        var np = Math.round(nv / viewers * 1000) / 10;
+        V.push(["خد بالك", fmtN(np) + "% من المشاهدين جداد (" + fmtN(nv) + " من " + fmtN(viewers) + ") — وصول واسع بس مفيش ارتباط: المتابعين " + fmtN(fol == null ? 0 : fol) + " بس، يعني تحويل مشاهد→متابع حوالي " + fmtN(Math.round((fol || 0) / viewers * 1000) / 10) + "%.", nv1]);
+      }
+      if (topPost) {
+        var tp = +topPost[1], tot = views || +topPost[2];
+        V.push(["خد بالك", "فيديو واحد (الأعلى) شايل " + fmtN(tp) + " من " + fmtN(tot) + " مشاهدة (" + fmtN(Math.round(tp / Math.max(tot, 1) * 100)) + "%) — الحساب كله لسه فيديو واحد؛ مفيش نمط نقدر نحكم عليه.", 1]);
+      }
+      ttShareVerdicts(V, locs, gender, age, 1, "");
+      var det = "";
+      det += statRow([["مشاهدات الفيديو", fmtN(views)], ["مشاهدين", fmtN(viewers)], ["مشاهدين جداد", fmtN(nv)], ["متابعين", fmtN(fol)]]);
+      det += "<p class='dim'>المصدر: الأرقام اتقرت من شاشة TikTok Studio نفسها (مش ملف تصدير). لو لصقت نص الشاشة هنا الأداة بتتعرف عليه لوحدها كـ«تيك توك».</p>";
+      if (locs.length) det += "<p><b>الدول:</b> " + locs.map(function (l) { return esc(l[0]) + " " + fmtN(l[1]) + "%"; }).join("، ") + "</p>";
+      if (gender.length) det += "<p><b>الجنس:</b> " + gender.map(function (l) { return esc(l[0]) + " " + fmtN(l[1]) + "%"; }).join("، ") + "</p>";
+      if (age.length) det += "<p><b>العمر:</b> " + age.map(function (l) { return esc(l[0]) + " " + fmtN(l[1]) + "%"; }).join("، ") + "</p>";
+      // سيناريوهات وافتراضات
+      var sc = "<ul>" +
+        "<li><b>ممكن:</b> الجمهور الإماراتي سببه إن تيك توك بيجرّب الفيديو الأول على منطقة الحساب/اللغة العربية العامة. يتأكد لو الفيديوهات الجاية بلهجة مصرية فيها كلمات مصرية والنسبة بتتحرك. يتنفي لو فضلت إمارات ≥٧٠٪ بعد ٥ فيديوهات.</li>" +
+        "<li><b>ممكن:</b> النسب كلها مبنية على ~٩٧ مشاهد بس (استنتاج: ١٪ = مشاهد واحد في الأرقام الصغيرة)، يعني الجغرافيا والعمر والجنس ممكن تتغيّر كلها بفيديو واحد زيادة.</li>" +
+        "<li><b>مستبعد لكن وارد:</b> إن في مشاهدات من حساب/شبكة أصحاب (٢٩٧ مشاهد، ٢ متابع) — تيك توك بيعرض «For You ١٠٠٪» حتى للمشاهدة من لينك؛ مفيش في الأرقام ما يثبتها أو ينفيها.</li>" +
+        "<li><b>شبه مستحيل:</b> إن ١٢٣ مشاهدة تعمل مكافآت — الحساب تحت حد برنامج المكافآت (٢ متابع)، فـ«Est. rewards» فاضي طبيعي.</li>" +
+        "<li><b>اللي يغيّر الحكم:</b> فيديو ثاني/ثالث بنفس الموضوع + نسبة مشاركة > ٠ + ظهور «Search» أكبر من ٠٪.</li></ul>";
+      return verdictCard(V) + card("🎵 تيك توك — القراءة (" + esc(fname) + ")", det) + card("🧭 السيناريوهات والافتراضات (تيك توك)", sc);
+    }
+    function analyzeTikTokCSV(h, rows, fname) {
+      var iDate = colIdx(h, ["date", "التاريخ"]);
+      var iTitle = colIdx(h, ["video title", "video name", "video description", "title"]);
+      var iViews = colIdx(h, ["video views", "views"]);
+      var iLikes = colIdx(h, ["likes"]), iCom = colIdx(h, ["comments"]), iSh = colIdx(h, ["shares"]);
+      var iPv = colIdx(h, ["profile views"]), iNf = colIdx(h, ["new followers", "followers"]);
+      var iAvg = colIdx(h, ["average watch time", "average time watched", "avg watch time"]);
+      var iFull = colIdx(h, ["watched full video", "full video watched rate", "full video views"]);
+      rows = rows.filter(function (r) { return r && r.some(function (c) { return String(c || "").trim(); }); });
+      var V = [], n = rows.length;
+      function sum(i) { return i < 0 ? null : rows.reduce(function (a, r) { return a + (num(r[i]) || 0); }, 0); }
+      var tv = sum(iViews), tl = sum(iLikes), tc = sum(iCom), ts = sum(iSh), tp = sum(iPv), tf = sum(iNf);
+      if (tv != null && tv > 0) {
+        var eng = ((tl || 0) + (tc || 0) + (ts || 0)) / tv * 100;
+        V.push([eng < 3 ? "ظبّط" : "خد بالك", "التفاعل " + fmtN(Math.round(eng * 10) / 10) + "% (لايك+تعليق+مشاركة ÷ مشاهدات " + fmtN(tv) + ")" + ((ts || 0) === 0 ? " — المشاركات صفر: ضيف دعوة صريحة للمشاركة." : "") , n]);
+      }
+      if (iTitle >= 0 && iViews >= 0 && n >= 2) {
+        var sorted = rows.slice().sort(function (a, b) { return (num(b[iViews]) || 0) - (num(a[iViews]) || 0); });
+        V.push(["اعمل", "أقوى فيديو: «" + esc(String(sorted[0][iTitle]).slice(0, 60)) + "» بـ " + fmtN(num(sorted[0][iViews])) + " مشاهدة — كرّر زاويته.", n]);
+      }
+      if (iFull >= 0 && iAvg >= 0 && n >= 1) V.push(["خد بالك", "الملف فيه نسبة مشاهدة الفيديو كامل ومتوسط وقت المشاهدة — ده أقرب مقياس للاحتفاظ؛ قارنه بطول كل فيديو.", n]);
+      if (tf != null && tv) V.push(["خد بالك", "متابعين جداد " + fmtN(tf) + " من " + fmtN(tv) + " مشاهدة = " + fmtN(Math.round(tf / tv * 1000) / 10) + " لكل ١٠٠ مشاهدة.", n]);
+      var cols = h.filter(function (x) { return String(x).trim(); }).slice(0, 14).join(" | ");
+      var det = "<p class='dim'>⚠️ صيغة ملفات تيك توك الحقيقية ما اتحققتش منها لسه: الأداة فهمت الأعمدة من أسمائها فقط (" + esc(cols) + "). لو في عمود مش متفهم، الحكم بيتجاهله ومش بيخمّنه.</p>" +
+        statRow([["صفوف", fmtN(n)], ["مشاهدات", fmtN(tv)], ["لايكات", fmtN(tl)], ["مشاركات", fmtN(ts)]]);
+      return verdictCard(V) + card("🎵 تيك توك — جدول (" + esc(fname) + ")", det);
+    }
+    function analyzeTikTokDist(h, rows, fname) {
+      var pairs = rows.map(function (r) { return [String(r[0] || "").trim(), pctV(r[1])]; }).filter(function (p) { return p[0] && p[1] != null; });
+      var v = (pairs[0] && pairs[0][1] <= 1.0001 && pairs.every(function (p) { return p[1] <= 1.0001; })) ? pairs.map(function (p) { return [p[0], p[1] * 100]; }) : pairs;
+      var kind = String(h[0] || "").toLowerCase(), V = [];
+      var locs = /country|territor|region|location|city/.test(kind) ? v : [];
+      var gender = /gender/.test(kind) ? v : [], age = /age/.test(kind) ? v : [];
+      ttShareVerdicts(V, locs, gender, age, pairs.length >= 3 ? 3 : 1, "");
+      var det = "<p class='dim'>⚠️ توزيع بسيط (عمود اسم + عمود نسبة) اتعرف من اسم العمود الأول «" + esc(h[0]) + "» — صيغة تيك توك الحقيقية ما اتحققتش منها.</p><p>" + v.map(function (p) { return esc(p[0]) + " " + fmtN(Math.round(p[1] * 10) / 10) + "%"; }).join("، ") + "</p>";
+      return verdictCard(V) + card("🎵 تيك توك — توزيع (" + esc(fname) + ")", det);
+    }
+    function analyzeTikTokJSON(j, fname) {
+      var counts = [];
+      (function walk(o, path, d) {
+        if (d > 5 || o == null) return;
+        if (Array.isArray(o)) { counts.push([path, o.length]); return; }
+        if (typeof o === "object") Object.keys(o).forEach(function (k) { walk(o[k], path + "/" + k, d + 1); });
+      })(j, "", 0);
+      counts = counts.filter(function (c) { return c[1] > 0; }).slice(0, 12);
+      return card("🎵 تيك توك — ملف بيانات الحساب (" + esc(fname) + ")",
+        "<p class='dim'>⚠️ اتعرف كملف تيك توك من أسماء المفاتيح بس؛ بنية الملف الحقيقي ما اتحققتش منها. ده في الغالب سجل نشاط مش أرقام أداء — الأرقام (مشاهدات، مصادر الزيارات، الجغرافيا) بتيجي من TikTok Studio.</p>" +
+        "<ul>" + counts.map(function (c) { return "<li>" + esc(c[0]) + ": " + fmtN(c[1]) + " عنصر</li>"; }).join("") + "</ul>");
+    }
+
     function analyzeText(name, text) {
+      var plat = detectPlatform(text, name);
+      var prev = curPlat; curPlat = plat;
+      var body;
+      try { body = analyzeText0(name, text, plat); } finally { curPlat = prev; }
+      var badge = plat ? "<div class='ch-card'><p>🔎 اتعرف تلقائيًا: ملف <b>" + PLATNAME[plat] + "</b> — اتحلّل بقواعد " + PLATNAME[plat] + " من غير ما تختار حاجة." + (plat !== platOfProp(prop) ? " (القناة المختارة فوق مش من نفس المنصة، فالأداة اتبعت الملف نفسه.)" : "") + "</p></div>" : "";
+      return badge + body;
+    }
+    function analyzeText0(name, text, plat) {
       var t = String(text).replace(/^﻿/, "");
       var first = t.slice(0, 400).trim();
+      if (plat === "tt" && first[0] !== "{" && first[0] !== "[" && !/,/.test(first.split("\n")[0])) return analyzeTikTokScreen(t, name);
       if (first[0] === "[" || first[0] === "{") {
         try {
           var j = JSON.parse(t);
+          if (plat === "tt" && !Array.isArray(j)) return analyzeTikTokJSON(j, name);
           if (Array.isArray(j)) {
             if (j[0] && (String(j[0].title || "").indexOf("Watched") === 0 || j[0].header === "YouTube")) return analyzeTakeout(parseTakeoutJSON(t), name);
             return analyzeFbPersonal(j, name);
@@ -2063,6 +2235,8 @@
       var rows = parseCSV(t);
       if (rows.length < 2) return card("⚠️ مفيش بيانات — " + esc(name), "<p>الملف فاضي أو مش بصيغة جدول.</p>");
       var s = sniffCSV(rows);
+      if (s.kind === "tiktok") return analyzeTikTokCSV(s.h, s.rows, name);
+      if (s.kind === "ttdist") return analyzeTikTokDist(s.h, s.rows, name);
       if (s.kind === "traffic") return analyzeTraffic(s.h, s.rows, name);
       if (s.kind === "geo") return analyzeGeo(s.h, s.rows, name);
       if (s.kind === "device") return analyzeDevice(s.h, s.rows, name);
@@ -2203,4 +2377,5 @@
     });
     loadSaved();
   })();
+
 })();
